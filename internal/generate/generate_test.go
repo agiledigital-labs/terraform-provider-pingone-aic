@@ -77,7 +77,7 @@ func seedDir(t *testing.T, dir string, names ...string) {
 
 func TestCleanGeneratedFilesRemovesOnlyOurOutput(t *testing.T) {
 	dir := t.TempDir()
-	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "esv_variables.tf", "esv_secrets.tf", "managed_objects.tf", "idm_endpoints.tf", "idm_schedules.tf", "journey_old.tf", filepath.Join("scripts", "old.js"), filepath.Join("hooks", "old.onCreate.js")}
+	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "esv_variables.tf", "esv_secrets.tf", "managed_objects.tf", "idm_endpoints.tf", "idm_schedules.tf", "access_rules.tf.review", "authentication_mappings.tf.review", "journey_old.tf", filepath.Join("scripts", "old.js"), filepath.Join("hooks", "old.onCreate.js")}
 	seedDir(t, dir, append(generated, "notes.md", generatedMarker)...)
 
 	if err := cleanGeneratedFiles(dir); err != nil {

@@ -3,8 +3,8 @@
 An **experimental** Terraform provider for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey nodes those trees
-actually use, OAuth2 clients, ESVs, custom managed-object types, and IDM
-endpoints and schedules.
+actually use, OAuth2 clients, ESVs, custom managed-object types, IDM
+endpoints and schedules, and individual IDM access / authentication rules.
 
 This is not a JSON-passthrough wrapper around the AIC REST API. Every attribute
 is typed against a catalog we verified on a live tenant. When AIC adds, removes,
@@ -44,9 +44,11 @@ not hardcoded UUIDs.
 | `pingoneaic_esv_variable`           | `/environment/variables/{id}`                      |
 | `pingoneaic_esv_secret`             | `/environment/secrets/{id}`                        |
 | `pingoneaic_managed_object`         | one type in `/openidm/config/managed`              |
-| `pingoneaic_idm_endpoint`           | `/openidm/config/endpoint/{name}`                  |
-| `pingoneaic_idm_schedule`           | `/openidm/config/schedule/{name}`                  |
-| `pingoneaic_<type>_node`            | every other node type used by the generate catalog |
+| `pingoneaic_idm_endpoint`             | `/openidm/config/endpoint/{name}`                          |
+| `pingoneaic_idm_schedule`             | `/openidm/config/schedule/{name}`                          |
+| `pingoneaic_access_rule`              | one `configs[]` grant in `/openidm/config/access`          |
+| `pingoneaic_authentication_mapping`   | one `rsFilter.staticUserMapping[]` entry                   |
+| `pingoneaic_<type>_node`              | every other node type used by the generate catalog         |
 
 `success` and `failure` are valid connection targets (AM's built-in static
 nodes). `x` / `y` are optional visual chrome and are omitted from generated HCL.
@@ -65,6 +67,16 @@ Changing `resource_prefix` does **not** rename existing journeys or OAuth2
 clients — AM keys both by name and cannot rename one, so the object stays at
 the name recorded in state. Scripts are keyed by UUID and do get renamed in
 place.
+
+`pingoneaic_access_rule` and `pingoneaic_authentication_mapping` have no
+name. Terraform finds the live entry by hashing the rule (canonical JSON
+SHA-256, same form as `aic access list`). Only that one row is written;
+everything else in the document stays as it was. There is nothing to prefix,
+so generate emits `access_rules.tf.review` / `authentication_mappings.tf.review`
+rather than applyable copies — applying generated HCL would append duplicate
+grants. Import an existing rule by its hash; create is refused if that hash
+is already in the document. `roles` is a comma-separated string on an access
+rule and an array on an authentication mapping.
 
 ## Authentication
 
@@ -100,12 +112,15 @@ That writes:
 - `generated/managed_objects.tf` — custom types only, plus `hooks/*.js` for inline lifecycle scripts
 - `generated/idm_endpoints.tf` + `generated/endpoints/*.js`
 - `generated/idm_schedules.tf` + `generated/schedules/*.js`
+- `generated/access_rules.tf.review` / `authentication_mappings.tf.review` —
+  existing rules, identified by hash; **not** loaded by Terraform
 - `generated/journey_<name>.tf` — nodes + tree, defaults omitted, UUIDs replaced
   with Terraform references
 
 **`-out` is a regenerated directory, not just a write target.** Each run deletes
 the previous run's `provider.tf`, `scripts.tf`, `oauth2_clients.tf`,
 `esv_*.tf`, `managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`,
+`access_rules.tf.review`, `authentication_mappings.tf.review`,
 `journey_*.tf`, `scripts/*.js`, `endpoints/*.js`, `schedules/*.js` and
 `hooks/*.js`, so an object removed in the tenant does not linger as a stale
 file. To make that safe it drops a `.pingoneaic-generated` marker and **refuses

@@ -61,6 +61,8 @@ type Client struct {
 	token     string
 	tokenExp  time.Time
 	managedMu sync.Mutex
+	accessMu  sync.Mutex
+	authMu    sync.Mutex
 }
 
 func New(cfg Config) (*Client, error) {

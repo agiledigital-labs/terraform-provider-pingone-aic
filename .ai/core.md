@@ -12,8 +12,9 @@ Canonical instructions for all AI agents working in this repo. `CLAUDE.md` and
 An **experimental** Terraform provider (terraform-plugin-framework, Go 1.25) for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey node types those trees
-use, OAuth2 clients, ESVs, custom managed-object types, and IDM endpoints and
-schedules. User-facing overview lives in [README.md](../README.md) — don't
+use, OAuth2 clients, ESVs, custom managed-object types, IDM endpoints and
+schedules, and individual `config/access` / `config/authentication` rules.
+User-facing overview lives in [README.md](../README.md) — don't
 duplicate it here.
 
 ## The one rule that shapes everything
@@ -34,7 +35,7 @@ unrecognised key.
 | `main.go`             | provider plugin entrypoint (`registry.terraform.io/agiledigital-labs/pingone-aic`)        |
 | `cmd/generate/`       | `pingoneaic-tf` CLI — pulls live tenant config into reviewable HCL                        |
 | `internal/provider/`  | provider schema, config resolution, resource registration                                 |
-| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go`, `idm_endpoint.go`, `idm_schedule.go` (node resources are one generic type driven by each catalog `Spec`) |
+| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go`, `idm_endpoint.go`, `idm_schedule.go`, `access_rule.go`, `authentication_mapping.go` (node resources are one generic type driven by each catalog `Spec`) |
 | `internal/nodetype/`  | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                |
 | `internal/oauth2client/` | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                             |
 | `internal/managedobject/` | typed decode/encode for one custom managed-object type (relationships remapped)                              |
@@ -140,7 +141,8 @@ is not in the realm).
 
 `-out` is **owned** by the tool: each run deletes the previous run's
 `provider.tf`, `scripts.tf`, `oauth2_clients.tf`, `esv_*.tf`,
-`managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`, `journey_*.tf`,
+`managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`,
+`access_rules.tf.review`, `authentication_mappings.tf.review`, `journey_*.tf`,
 `scripts/*.js`, `endpoints/*.js`, `schedules/*.js` and `hooks/*.js` so deleted
 objects don't linger. It writes a `.pingoneaic-generated` marker to claim the
 directory and refuses to delete anything in a directory that lacks the marker
@@ -250,6 +252,9 @@ Most relevant here:
 | `09-journeys.md`                  | auth trees, nodes, custom nodes                 |
 | `10-managed-objects.md`           | `config/managed` whole-doc RMW, Q14 lost updates |
 | `11-idm-endpoints.md`             | IDM endpoints + schedules; no Accept-API-Version |
+| `18-internal-roles.md`            | role `_id` vs `name`; access vs auth `roles` shapes |
+| `19-config-access.md`             | `config/access` whole-doc RMW, no `_rev`, disjunction |
+| `20-config-authentication.md`     | `config/authentication` `rsFilter.staticUserMapping` |
 | `13-script-contexts.md`           | authoritative per-context binding metadata      |
 | `99-quirks-and-open-questions.md` | cross-cutting weirdness worth a skim            |
 
@@ -309,15 +314,28 @@ shapes from memory.
 
 In scope: scripts, journeys, journey nodes, OAuth2 clients, ESVs (variables and
 secrets), custom managed-object types (including lifecycle hook blocks), IDM
-endpoints and schedules. Explicitly
+endpoints and schedules, and **individual** `config/access` rules /
+`config/authentication` `staticUserMapping` entries. Explicitly
 **out** of scope until that path is proven: SAML, secret mappings, the
-realm-wide OIDC provider service, and Ping-shipped managed objects
-(`alpha_user`, …) themselves. Lifecycle hooks are `hook` blocks on
+realm-wide OIDC provider service, Ping-shipped managed objects
+(`alpha_user`, …) themselves, and the rest of `rsFilter`
+(`subjectMapping`, `anonymousUserMapping`, scopes, client credentials).
+Lifecycle hooks are `hook` blocks on
 `pingoneaic_managed_object` (custom types only) — never written onto
 `alpha_user`.
 
 IDM config (`/openidm/config/…`) must **not** send `Accept-API-Version`.
 Schedule copies default to `enabled = false` so they cannot fire.
+
+**Access and authentication rules have no server id.** Terraform stores a
+SHA-256 of the rule's canonical JSON (sorted keys, compact separators — the
+same digest `aic access list` prints) as `id`. Create appends; update
+replaces the first live entry whose hash matches the prior `id`; delete
+removes that one copy. A rule whose hash already exists is refused on create
+(import it). Other entries in the document are never decoded or re-encoded.
+`resource_prefix` does not apply — there is no name to prefix, and applying
+generated copies would append duplicate grants. Generate therefore writes
+`.tf.review` files, not applyable `.tf`.
 
 **Managed config writes are not read-your-writes.** `ReplaceManagedConfirmed`
 re-reads until the new type is visible. Never PUT a document that was not
