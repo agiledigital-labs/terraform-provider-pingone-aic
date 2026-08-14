@@ -1,18 +1,43 @@
 name: test
 
 on:
+  # Work lands on main directly in these early stages, so gate every branch
+  # push rather than relying on a pull_request check that may never run.
   push:
-    branches: [main]
   pull_request:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - run: go test ./...
-      - run: go build -o /tmp/terraform-provider-pingone-aic .
-      - run: go build -o /tmp/pingoneaic-tf ./cmd/generate
+
+      # Use the repo's pinned toolchain rather than resolving Go separately,
+      # so CI and `nix develop` cannot drift. `.#ci` is the lean shell — no
+      # terraform, which is unfree and would build from source here.
+      - uses: cachix/install-nix-action@v31.11.1
+
+      - name: gofmt
+        run: |
+          unformatted=$(nix develop .#ci --command gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "needs gofmt:"
+            echo "$unformatted" | sed 's/^/  /'
+            exit 1
+          fi
+
+      - name: go vet
+        run: nix develop .#ci --command go vet ./...
+
+      - name: go test
+        run: nix develop .#ci --command go test ./...
+
+      - name: build provider
+        run: nix develop .#ci --command go build -o /tmp/terraform-provider-pingone-aic .
+
+      - name: build generate CLI
+        run: nix develop .#ci --command go build -o /tmp/pingoneaic-tf ./cmd/generate

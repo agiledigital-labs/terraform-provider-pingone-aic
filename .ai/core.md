@@ -52,7 +52,11 @@ gopls). Work inside it so everyone gets the same versions:
 ```sh
 nix develop                      # interactive shell
 nix develop --command make test  # one-off
+nix develop .#ci                 # lean shell CI uses: Go + Make, no terraform
 ```
+
+Entering the default shell also points `core.hooksPath` at `.githooks/`
+(repo-local and idempotent).
 
 Everything below assumes that shell. It is not mandatory — a system Go that
 satisfies `go.mod` works fine — but version-skew bugs are yours to diagnose if
@@ -67,9 +71,32 @@ make fmt           # gofmt -w .
 make tidy          # go mod tidy
 ```
 
-Gates before calling work done: `go test ./...`, `go build ./...`, `gofmt -l .`
-(must be empty), `go vet ./...`. CI (`.github/workflows/test.yml`) runs the
-tests plus both builds on push to `main` and on PRs.
+## Gates
+
+`gofmt -l .` (must be empty), `go vet ./...`, `go build ./...`, `go test ./...`.
+
+Three places run them, deliberately staged by cost:
+
+| When                   | What runs                                  | Where                        |
+| ---------------------- | ------------------------------------------ | ---------------------------- |
+| every commit           | gofmt on **staged** Go files + secret scan | `.githooks/pre-commit`       |
+| every push             | gofmt, build, vet, test on the whole tree  | `.githooks/pre-push`         |
+| every branch push + PR | the same, via `nix develop .#ci`           | `.github/workflows/test.yml` |
+
+Hooks install themselves when you enter `nix develop` (it sets
+`core.hooksPath=.githooks`); set it by hand otherwise. `--no-verify` bypasses
+them — but **work lands on `main` directly** in these early stages, so
+`pre-push` is often the last automated check before a change is public. Bypass
+knowingly.
+
+The pre-commit secret scan rejects staged lines containing a JWT, a PEM private
+key, or a real `*.forgeblocks.com` hostname. The sandbox hostname belongs in
+`.envrc` (gitignored); use `openam-example.forgeblocks.com` as the placeholder
+in anything committed.
+
+CI uses the pinned toolchain via the lean `.#ci` shell, so it cannot drift from
+local. Per-step `nix develop` overhead is ~0.1–0.3s once the store is warm; the
+one-off cost is the Nix install and Go download at the start of each run.
 
 Bumping the toolchain is `nix flake update` — commit the resulting `flake.lock`
 on its own, so a version bump is never buried inside a behavioural change. Note

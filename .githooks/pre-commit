@@ -1,0 +1,53 @@
+#!/bin/sh
+# Cheap checks only — this runs on every commit and must stay fast.
+# Expensive gates (build / vet / test) live in .githooks/pre-push.
+#
+# Bypass with: git commit --no-verify
+set -eu
+
+fail=0
+
+# --- formatting -------------------------------------------------------------
+# Only staged Go files, so cost scales with the change, not the tree.
+staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
+
+if [ -n "$staged_go" ]; then
+	if ! command -v gofmt >/dev/null 2>&1; then
+		echo "pre-commit: gofmt not found — run inside 'nix develop'" >&2
+		exit 1
+	fi
+	# Word splitting is intended: one path per line, and Go files do not
+	# have spaces in their names.
+	# shellcheck disable=SC2086
+	unformatted=$(gofmt -l $staged_go)
+	if [ -n "$unformatted" ]; then
+		echo "pre-commit: needs gofmt:" >&2
+		echo "$unformatted" | sed 's/^/  /' >&2
+		echo "  fix: make fmt" >&2
+		fail=1
+	fi
+fi
+
+# --- secret / tenant-identifier guard ---------------------------------------
+# Scans only lines being ADDED. This repo keeps the sandbox hostname in
+# .envrc (gitignored) and tokens are short-lived, so anything matching here
+# in a staged diff is almost certainly a mistake.
+added=$(git diff --cached --unified=0 --diff-filter=ACM | grep '^+' | grep -v '^+++' || true)
+
+if [ -n "$added" ]; then
+	leaks=$(
+		printf '%s\n' "$added" |
+			grep -E 'eyJ[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[A-Za-z0-9-]+\.forgeblocks\.com' |
+			grep -v 'openam-example\.forgeblocks\.com' || true
+	)
+	if [ -n "$leaks" ]; then
+		echo "pre-commit: possible secret or real tenant identifier in staged changes:" >&2
+		printf '%s\n' "$leaks" | cut -c1-120 | sed 's/^/  /' >&2
+		echo >&2
+		echo "  JWTs, private keys and real *.forgeblocks.com hostnames must not be committed." >&2
+		echo "  Use \$PINGONEAIC_TENANT_URL, or the openam-example.forgeblocks.com placeholder." >&2
+		fail=1
+	fi
+fi
+
+exit "$fail"

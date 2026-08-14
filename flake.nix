@@ -28,21 +28,44 @@
         );
     in
     {
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          packages = [
-            # go.mod requires >= 1.24.
+      devShells = forAllSystems (
+        pkgs:
+        let
+          # Everything needed to build, gate and test the Go code.
+          # go.mod requires >= 1.24.
+          goToolchain = [
             pkgs.go
-            pkgs.gopls
-            pkgs.terraform
             pkgs.gnumake
           ];
+        in
+        {
+          # Lean shell for CI (.github/workflows/test.yml).
+          #
+          # Deliberately excludes terraform: it is unfree (BUSL-1.1), so it is
+          # absent from the public binary cache and would compile from source
+          # on every cold runner — minutes of CI time for a dependency no test
+          # currently invokes. Add it here when acceptance tests need it, and
+          # add a nix store cache at the same time.
+          ci = pkgs.mkShell { packages = goToolchain; };
 
-          shellHook = ''
-            echo "terraform-provider-pingone-aic  $(go version | cut -d' ' -f3)  $(terraform version | head -1)"
-          '';
-        };
-      });
+          default = pkgs.mkShell {
+            packages = goToolchain ++ [
+              pkgs.gopls
+              pkgs.terraform
+            ];
+
+            shellHook = ''
+              # Cheap checks on commit, expensive ones on push. Repo-local
+              # (.git/config only) and idempotent.
+              if [ -d .git ] && [ "$(git config --get core.hooksPath)" != ".githooks" ]; then
+                git config core.hooksPath .githooks
+                echo "enabled git hooks -> .githooks (bypass with --no-verify)"
+              fi
+              echo "terraform-provider-pingone-aic  $(go version | cut -d' ' -f3)  $(terraform version | head -1)"
+            '';
+          };
+        }
+      );
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt-tree);
     };
