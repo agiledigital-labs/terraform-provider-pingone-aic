@@ -184,17 +184,20 @@ type emittedNode struct {
 }
 
 type emittedJourney struct {
-	Name          string
-	Description   string
-	Enabled       bool
-	Identity      string
-	Inner         bool
-	MustRun       bool
-	NoSession     bool
-	Transactional bool
-	Entry         string
-	Categories    []string
-	Nodes         []emittedTreeNode
+	Name               string
+	Description        string
+	Enabled            bool
+	Identity           string
+	Inner              bool
+	MustRun            bool
+	NoSession          bool
+	Transactional      bool
+	MaximumIdleTime    *int64
+	MaximumSessionTime *int64
+	TreeTimeout        *int64
+	Entry              string
+	Categories         []string
+	Nodes              []emittedTreeNode
 }
 
 type emittedTreeNode struct {
@@ -218,15 +221,18 @@ func (g *gen) ingestJourney(ctx context.Context, name string) error {
 	}
 
 	j := emittedJourney{
-		Name:          prefix.Strip(g.opt.Prefix, name),
-		Description:   str(raw["description"]),
-		Enabled:       boolDef(raw["enabled"], true),
-		Identity:      str(raw["identityResource"]),
-		Inner:         boolDef(raw["innerTreeOnly"], false),
-		MustRun:       boolDef(raw["mustRun"], false),
-		NoSession:     boolDef(raw["noSession"], false),
-		Transactional: boolDef(raw["transactionalOnly"], false),
-		Entry:         str(raw["entryNodeId"]),
+		Name:               prefix.Strip(g.opt.Prefix, name),
+		Description:        str(raw["description"]),
+		Enabled:            boolDef(raw["enabled"], true),
+		Identity:           str(raw["identityResource"]),
+		Inner:              boolDef(raw["innerTreeOnly"], false),
+		MustRun:            boolDef(raw["mustRun"], false),
+		NoSession:          boolDef(raw["noSession"], false),
+		Transactional:      boolDef(raw["transactionalOnly"], false),
+		MaximumIdleTime:    optionalInt64(raw["maximumIdleTime"]),
+		MaximumSessionTime: optionalInt64(raw["maximumSessionTime"]),
+		TreeTimeout:        optionalInt64(raw["treeTimeout"]),
+		Entry:              str(raw["entryNodeId"]),
 	}
 	if ui, ok := raw["uiConfig"].(map[string]any); ok {
 		if cs := str(ui["categories"]); cs != "" && cs != "[]" {
@@ -504,6 +510,18 @@ func (g *gen) writeJourneys() error {
 		if j.Transactional {
 			b.WriteString("  transactional_only = true\n")
 		}
+		for _, setting := range []struct {
+			name  string
+			value *int64
+		}{
+			{"maximum_idle_time", j.MaximumIdleTime},
+			{"maximum_session_time", j.MaximumSessionTime},
+			{"tree_timeout", j.TreeTimeout},
+		} {
+			if setting.value != nil {
+				b.WriteString(fmt.Sprintf("  %s = %d\n", setting.name, *setting.value))
+			}
+		}
 		if len(j.Categories) > 0 {
 			b.WriteString(fmt.Sprintf("  categories = %s\n", hclStringList(j.Categories)))
 		}
@@ -653,6 +671,21 @@ func boolDef(v any, def bool) bool {
 		return def
 	}
 	return b
+}
+
+func optionalInt64(v any) *int64 {
+	var value int64
+	switch n := v.(type) {
+	case float64:
+		value = int64(n)
+	case int64:
+		value = n
+	case int:
+		value = int64(n)
+	default:
+		return nil
+	}
+	return &value
 }
 
 func jsonUnmarshal(s string, dest any) error {

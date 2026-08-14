@@ -96,6 +96,15 @@ func TestProgressfIsOptionalAndReadable(t *testing.T) {
 	}
 }
 
+func TestOptionalInt64(t *testing.T) {
+	if got := optionalInt64(float64(42)); got == nil || *got != 42 {
+		t.Fatalf("got %#v, want 42", got)
+	}
+	if got := optionalInt64(nil); got != nil {
+		t.Fatalf("got %#v, want nil", got)
+	}
+}
+
 func TestRunHonorsCancelledContext(t *testing.T) {
 	httpClient := &http.Client{Transport: generateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		<-req.Context().Done()
