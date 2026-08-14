@@ -107,6 +107,12 @@ func (c *Client) DeleteTree(ctx context.Context, realm, name string) error {
 	return nil
 }
 
+// DefaultNodeVersion is the version AM assumes for a tree node when the tree
+// body carries none. The provider schema defaults to it and the decode path
+// falls back to it; keeping both on this constant stops them drifting apart and
+// producing an inconsistent-result-after-apply.
+const DefaultNodeVersion = "1.0"
+
 // known tree attributes AM accepts on PUT (docs/api/09-journeys.md).
 var treeWriteAttrs = map[string]struct{}{
 	"description": {}, "enabled": {}, "entryNodeId": {}, "identityResource": {},
@@ -115,6 +121,10 @@ var treeWriteAttrs = map[string]struct{}{
 	"transactionalOnly": {}, "treeTimeout": {}, "uiConfig": {},
 }
 
+// TreeWriteBody strips the read-only keys from a tree AM returned and rejects
+// anything the provider does not model, at both the top level and inside the
+// nested objects AM replaces wholesale on PUT. It is the single entry point for
+// that check: callers must not have to remember to run a second validator.
 func TreeWriteBody(raw map[string]any) (map[string]any, error) {
 	out := make(map[string]any, len(treeWriteAttrs))
 	var unknown []string
@@ -131,6 +141,9 @@ func TreeWriteBody(raw map[string]any) (map[string]any, error) {
 	if len(unknown) > 0 {
 		return nil, fmt.Errorf("tree has unmodelled attributes %v — add them to the provider (see internal/client/journeys.go treeWriteAttrs)", unknown)
 	}
+	if err := validateTreeInternals(raw); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -140,9 +153,10 @@ var (
 	staticNodeAttrs = map[string]struct{}{"x": {}, "y": {}}
 )
 
-// ValidateTreeInternals enforces the same fail-closed contract as TreeWriteBody
-// for nested tree objects that AM replaces as a whole on PUT.
-func ValidateTreeInternals(raw map[string]any) error {
+// validateTreeInternals enforces the same fail-closed contract as TreeWriteBody
+// for nested tree objects that AM replaces as a whole on PUT. Reached only via
+// TreeWriteBody, so there is one thing for callers to remember.
+func validateTreeInternals(raw map[string]any) error {
 	if err := validateObjectKeys(raw["uiConfig"], "uiConfig", treeUIAttrs); err != nil {
 		return err
 	}

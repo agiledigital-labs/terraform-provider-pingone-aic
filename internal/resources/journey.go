@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/amjson"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/prefix"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -125,7 +126,7 @@ func (r *journeyResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 						"id":           schema.StringAttribute{Required: true},
 						"type":         schema.StringAttribute{Required: true, MarkdownDescription: "AM node type, e.g. `ScriptedDecisionNode`."},
 						"display_name": schema.StringAttribute{Optional: true},
-						"version":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("1.0")},
+						"version":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(client.DefaultNodeVersion)},
 						"connections": schema.MapAttribute{
 							Required:            true,
 							ElementType:         types.StringType,
@@ -158,7 +159,7 @@ func (r *journeyResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	got, err := r.write(ctx, plan)
+	got, err := r.write(ctx, plan, journeyModel{})
 	if err != nil {
 		resp.Diagnostics.AddError("Create journey", err.Error())
 		return
@@ -191,12 +192,13 @@ func (r *journeyResource) Read(ctx context.Context, req resource.ReadRequest, re
 }
 
 func (r *journeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan journeyModel
+	var plan, prior journeyModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	got, err := r.write(ctx, plan)
+	got, err := r.write(ctx, plan, prior)
 	if err != nil {
 		resp.Diagnostics.AddError("Update journey", err.Error())
 		return
@@ -216,12 +218,25 @@ func (r *journeyResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
-func journeyRemoteName(state journeyModel, pfx string) string {
-	if !state.ID.IsNull() && !state.ID.IsUnknown() && state.ID.ValueString() != "" {
-		return state.ID.ValueString()
+// journeyRemoteID returns the AIC tree name recorded in state, or "" when the
+// resource has no remote identity yet (create, or an import before Read).
+func journeyRemoteID(state journeyModel) string {
+	for _, v := range []types.String{state.ID, state.RemoteName} {
+		if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
+			return v.ValueString()
+		}
 	}
-	if !state.RemoteName.IsNull() && !state.RemoteName.IsUnknown() && state.RemoteName.ValueString() != "" {
-		return state.RemoteName.ValueString()
+	return ""
+}
+
+// journeyRemoteName resolves which AIC tree to operate on. AM keys trees by
+// name and offers no rename, so once we know the stored name we must keep using
+// it: resource_prefix is provider-level config and never triggers replacement,
+// so recomputing the name from the prefix would silently address a different
+// tree after a prefix change.
+func journeyRemoteName(state journeyModel, pfx string) string {
+	if id := journeyRemoteID(state); id != "" {
+		return id
 	}
 	return prefix.Apply(pfx, state.Name.ValueString())
 }
@@ -236,8 +251,15 @@ func (r *journeyResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.Strip(r.client.Prefix, parts[1]))...)
 }
 
-func (r *journeyResource) write(ctx context.Context, plan journeyModel) (journeyModel, error) {
+// write PUTs the planned tree. prior carries the state Terraform already holds
+// (zero on create); when it names a tree, that name wins over the prefixed plan
+// name so an Update keeps editing the tree Read and Delete address rather than
+// creating a second one alongside it.
+func (r *journeyResource) write(ctx context.Context, plan, prior journeyModel) (journeyModel, error) {
 	remote := prefix.Apply(r.client.Prefix, plan.Name.ValueString())
+	if existing := journeyRemoteID(prior); existing != "" {
+		remote = existing
+	}
 	body, err := modelToTree(plan, r.client.Prefix)
 	if err != nil {
 		return journeyModel{}, err
@@ -356,11 +378,8 @@ func displayConn(dest string) string {
 }
 
 func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyModel, error) {
-	// Refuse unmodelled top-level keys so an AIC tree-schema change is visible.
+	// Refuse unmodelled keys so an AIC tree-schema change is visible.
 	if _, err := client.TreeWriteBody(raw); err != nil {
-		return journeyModel{}, err
-	}
-	if err := client.ValidateTreeInternals(raw); err != nil {
 		return journeyModel{}, err
 	}
 
@@ -422,14 +441,21 @@ func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyMode
 				}
 			}
 			mv, _ := types.MapValueFrom(context.Background(), types.StringType, conns)
+			// AM omits version on nodes that carry the default. Fall back to the
+			// same constant the schema defaults to, or state would hold "" where
+			// the plan holds "1.0" and Terraform would abort the apply.
+			version := amjson.StringAt(meta, "version")
+			if version == "" {
+				version = client.DefaultNodeVersion
+			}
 			node := journeyNodeModel{
 				ID:          types.StringValue(id),
-				Type:        types.StringValue(str(meta, "nodeType")),
+				Type:        types.StringValue(amjson.StringAt(meta, "nodeType")),
 				DisplayName: types.StringNull(),
-				Version:     types.StringValue(str(meta, "version")),
+				Version:     types.StringValue(version),
 				Connections: mv,
 			}
-			if dn := str(meta, "displayName"); dn != "" {
+			if dn := amjson.StringAt(meta, "displayName"); dn != "" {
 				node.DisplayName = types.StringValue(dn)
 			}
 			// Positions are visual chrome. Keep them in state only when the
@@ -456,12 +482,12 @@ func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyMode
 		Name:               types.StringValue(name),
 		RemoteName:         types.StringValue(remote),
 		Description:        desc,
-		Enabled:            types.BoolValue(boolish(raw["enabled"], true)),
+		Enabled:            types.BoolValue(amjson.Bool(raw["enabled"], true)),
 		IdentityResource:   idRes,
-		InnerTreeOnly:      types.BoolValue(boolish(raw["innerTreeOnly"], false)),
-		MustRun:            types.BoolValue(boolish(raw["mustRun"], false)),
-		NoSession:          types.BoolValue(boolish(raw["noSession"], false)),
-		TransactionalOnly:  types.BoolValue(boolish(raw["transactionalOnly"], false)),
+		InnerTreeOnly:      types.BoolValue(amjson.Bool(raw["innerTreeOnly"], false)),
+		MustRun:            types.BoolValue(amjson.Bool(raw["mustRun"], false)),
+		NoSession:          types.BoolValue(amjson.Bool(raw["noSession"], false)),
+		TransactionalOnly:  types.BoolValue(amjson.Bool(raw["transactionalOnly"], false)),
 		MaximumIdleTime:    int64ish(raw["maximumIdleTime"]),
 		MaximumSessionTime: int64ish(raw["maximumSessionTime"]),
 		TreeTimeout:        int64ish(raw["treeTimeout"]),
@@ -471,30 +497,14 @@ func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyMode
 	}, nil
 }
 
+// int64ish adapts an AM number to the framework type. The coercion itself lives
+// in internal/amjson, which internal/generate shares.
 func int64ish(v any) types.Int64 {
-	switch n := v.(type) {
-	case float64:
-		return types.Int64Value(int64(n))
-	case int64:
-		return types.Int64Value(n)
-	case int:
-		return types.Int64Value(int64(n))
-	default:
+	n, ok := amjson.Int64(v)
+	if !ok {
 		return types.Int64Null()
 	}
-}
-
-func str(m map[string]any, k string) string {
-	s, _ := m[k].(string)
-	return s
-}
-
-func boolish(v any, def bool) bool {
-	b, ok := v.(bool)
-	if !ok {
-		return def
-	}
-	return b
+	return types.Int64Value(n)
 }
 
 // silence unused in case treeToModel diagnostics helper is referenced

@@ -9,10 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/testutil"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
 func TestSanitizeIdent(t *testing.T) {
@@ -47,17 +50,24 @@ func TestSelectJourneysPreservesTenantOrder(t *testing.T) {
 	}
 }
 
-func TestCleanGeneratedFilesLeavesUnrelatedFiles(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.Mkdir(filepath.Join(dir, "scripts"), 0o755); err != nil {
+// seedDir writes the named files (relative to dir) with dummy content.
+func seedDir(t *testing.T, dir string, names ...string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	generated := []string{"provider.tf", "scripts.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
-	for _, name := range append(generated, "notes.md") {
+	for _, name := range names {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
+}
+
+func TestCleanGeneratedFilesRemovesOnlyOurOutput(t *testing.T) {
+	dir := t.TempDir()
+	generated := []string{"provider.tf", "scripts.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
+	seedDir(t, dir, append(generated, "notes.md", generatedMarker)...)
+
 	if err := cleanGeneratedFiles(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -68,6 +78,45 @@ func TestCleanGeneratedFilesLeavesUnrelatedFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "notes.md")); err != nil {
 		t.Fatalf("unrelated file removed: %v", err)
+	}
+}
+
+// The dangerous case: -out pointed at hand-written config. Without a marker we
+// must refuse rather than delete, even though the names match our patterns.
+func TestCleanGeneratedFilesRefusesUnmarkedDirectory(t *testing.T) {
+	dir := t.TempDir()
+	seedDir(t, dir, "provider.tf", "journey_handwritten.tf")
+
+	err := cleanGeneratedFiles(dir)
+	if err == nil || !strings.Contains(err.Error(), generatedMarker) {
+		t.Fatalf("got %v, want a refusal naming the marker", err)
+	}
+	for _, name := range []string{"provider.tf", "journey_handwritten.tf"} {
+		if _, statErr := os.Stat(filepath.Join(dir, name)); statErr != nil {
+			t.Errorf("refused run deleted %q anyway: %v", name, statErr)
+		}
+	}
+}
+
+func TestCleanGeneratedFilesAcceptsFreshDirectory(t *testing.T) {
+	dir := t.TempDir()
+	seedDir(t, dir, "notes.md")
+	if err := cleanGeneratedFiles(dir); err != nil {
+		t.Fatalf("first run into a directory with no generated files: %v", err)
+	}
+}
+
+// A run that fails after claiming the directory must still leave it cleanable,
+// or the next invocation would refuse forever.
+func TestWriteMarkerMakesDirectoryCleanable(t *testing.T) {
+	dir := t.TempDir()
+	seedDir(t, dir)
+	if err := writeMarker(dir); err != nil {
+		t.Fatal(err)
+	}
+	seedDir(t, dir, "journey_partial.tf")
+	if err := cleanGeneratedFiles(dir); err != nil {
+		t.Fatalf("marked directory should be cleanable: %v", err)
 	}
 }
 
@@ -96,20 +145,48 @@ func TestProgressfIsOptionalAndReadable(t *testing.T) {
 	}
 }
 
-func TestOptionalInt64(t *testing.T) {
-	if got := optionalInt64(float64(42)); got == nil || *got != 42 {
-		t.Fatalf("got %#v, want 42", got)
+// sanitizeIdent feeds HCL resource labels, so a bad output is a syntax error in
+// generated config. Both invariants hold for any input, not just the examples.
+func FuzzSanitizeIdent(f *testing.F) {
+	for _, seed := range []string{"", "Get IP", "1abc", "über-name", "__", "A.B/C", "journey_old"} {
+		f.Add(seed)
 	}
-	if got := optionalInt64(nil); got != nil {
-		t.Fatalf("got %#v, want nil", got)
+	f.Fuzz(func(t *testing.T, s string) {
+		got := sanitizeIdent(s)
+		if !validHCLIdent.MatchString(got) {
+			t.Fatalf("sanitizeIdent(%q) = %q, which is not a valid HCL identifier", s, got)
+		}
+		if again := sanitizeIdent(got); again != got {
+			t.Fatalf("not idempotent: sanitizeIdent(%q) = %q, then %q", s, got, again)
+		}
+	})
+}
+
+var validHCLIdent = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+
+// hclwrite.Format is the last thing to touch every emitted file; if it were not
+// idempotent the generated tree would churn between otherwise identical runs.
+func FuzzWriteTerraformFileFormatIdempotent(f *testing.F) {
+	for _, seed := range []string{
+		"resource \"a\" \"b\" {\n  x = 1\n  longer = 2\n}\n",
+		"a = 1\n",
+		"",
+	} {
+		f.Add(seed)
 	}
+	f.Fuzz(func(t *testing.T, body string) {
+		once := hclwrite.Format([]byte(body))
+		if twice := hclwrite.Format(once); !bytes.Equal(once, twice) {
+			t.Fatalf("Format not idempotent for %q: %q then %q", body, once, twice)
+		}
+	})
 }
 
 func TestRunHonorsCancelledContext(t *testing.T) {
-	httpClient := &http.Client{Transport: generateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+	httpClient := testutil.Client(func(req *http.Request) (*http.Response, error) {
 		<-req.Context().Done()
 		return nil, req.Context().Err()
-	})}
+	})
 	c, err := client.New(client.Config{
 		TenantURL: "https://tenant.example", AccessToken: "token", HTTPClient: httpClient,
 	})
@@ -122,12 +199,6 @@ func TestRunHonorsCancelledContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v, want context cancellation", err)
 	}
-}
-
-type generateRoundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f generateRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
 }
 
 func TestDisplayConn(t *testing.T) {

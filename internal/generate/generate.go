@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/amjson"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/nodetype"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/prefix"
@@ -46,6 +47,10 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		opt.OutDir = "generated"
 	}
 	if err := os.MkdirAll(filepath.Join(opt.OutDir, "scripts"), 0o755); err != nil {
+		return nil, err
+	}
+	// Fail before spending a tenant round-trip if we would refuse to write here.
+	if err := checkGeneratedDir(opt.OutDir); err != nil {
 		return nil, err
 	}
 
@@ -94,6 +99,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
 		return nil, err
 	}
+	if err := writeMarker(opt.OutDir); err != nil {
+		return nil, err
+	}
 
 	if err := g.writeProvider(); err != nil {
 		return nil, err
@@ -140,28 +148,84 @@ func selectJourneys(available, requested []string) ([]string, error) {
 	return selected, nil
 }
 
-func cleanGeneratedFiles(outDir string) error {
-	patterns := []string{
-		filepath.Join(outDir, "journey_*.tf"),
-		filepath.Join(outDir, "scripts", "*.js"),
-	}
+// generatedMarker names a directory as ours to overwrite. Written on every run;
+// without it we refuse to delete anything, so pointing -out at a hand-written
+// directory reports an error instead of eating the files in it.
+const generatedMarker = ".pingoneaic-generated"
+
+// generatedPaths lists the files a previous run of this tool would have left in
+// outDir. Stale ones must go, or a journey deleted in the tenant would linger.
+func generatedPaths(outDir string) ([]string, error) {
 	paths := []string{
 		filepath.Join(outDir, "provider.tf"),
 		filepath.Join(outDir, "scripts.tf"),
 	}
-	for _, pattern := range patterns {
+	for _, pattern := range []string{
+		filepath.Join(outDir, "journey_*.tf"),
+		filepath.Join(outDir, "scripts", "*.js"),
+	} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
-			return fmt.Errorf("match old generated files %q: %w", pattern, err)
+			return nil, fmt.Errorf("match old generated files %q: %w", pattern, err)
 		}
 		paths = append(paths, matches...)
 	}
+	present := make([]string, 0, len(paths))
 	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			present = append(present, path)
+		}
+	}
+	return present, nil
+}
+
+// cleanGeneratedFiles removes the previous run's output from outDir. It deletes
+// nothing unless the directory carries generatedMarker: an unmarked directory
+// holding files that look generated is far more likely to be someone's
+// hand-written config than a stale run, and this is destructive.
+// checkGeneratedDir reports whether outDir is ours to overwrite: either it
+// carries the marker, or it holds nothing this tool would delete.
+func checkGeneratedDir(outDir string) error {
+	if _, err := os.Stat(filepath.Join(outDir, generatedMarker)); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("check %q: %w", filepath.Join(outDir, generatedMarker), err)
+	}
+	stale, err := generatedPaths(outDir)
+	if err != nil {
+		return err
+	}
+	if len(stale) > 0 {
+		return fmt.Errorf(
+			"refusing to write to %q: it holds files this tool would delete (%s) but no %s marker, so it was not produced by a previous run — remove them or point -out at a fresh directory",
+			outDir, strings.Join(stale, ", "), generatedMarker)
+	}
+	return nil // fresh directory, or one holding only unrelated files
+}
+
+func cleanGeneratedFiles(outDir string) error {
+	if err := checkGeneratedDir(outDir); err != nil {
+		return err
+	}
+	stale, err := generatedPaths(outDir)
+	if err != nil {
+		return err
+	}
+	for _, path := range append(stale, filepath.Join(outDir, generatedMarker)) {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove old generated file %q: %w", path, err)
 		}
 	}
 	return nil
+}
+
+// writeMarker claims outDir before any file is written, so a run that fails
+// part-way still leaves a directory the next run is allowed to clean.
+func writeMarker(outDir string) error {
+	body := "# Written by pingoneaic-tf. This directory is regenerated: files\n" +
+		"# matching provider.tf, scripts.tf, journey_*.tf and scripts/*.js are\n" +
+		"# deleted on each run. Do not keep hand-written config here.\n"
+	return os.WriteFile(filepath.Join(outDir, generatedMarker), []byte(body), 0o644)
 }
 
 type gen struct {
@@ -216,26 +280,23 @@ func (g *gen) ingestJourney(ctx context.Context, name string) error {
 	if _, err := client.TreeWriteBody(raw); err != nil {
 		return err
 	}
-	if err := client.ValidateTreeInternals(raw); err != nil {
-		return err
-	}
 
 	j := emittedJourney{
 		Name:               prefix.Strip(g.opt.Prefix, name),
-		Description:        str(raw["description"]),
-		Enabled:            boolDef(raw["enabled"], true),
-		Identity:           str(raw["identityResource"]),
-		Inner:              boolDef(raw["innerTreeOnly"], false),
-		MustRun:            boolDef(raw["mustRun"], false),
-		NoSession:          boolDef(raw["noSession"], false),
-		Transactional:      boolDef(raw["transactionalOnly"], false),
-		MaximumIdleTime:    optionalInt64(raw["maximumIdleTime"]),
-		MaximumSessionTime: optionalInt64(raw["maximumSessionTime"]),
-		TreeTimeout:        optionalInt64(raw["treeTimeout"]),
-		Entry:              str(raw["entryNodeId"]),
+		Description:        amjson.String(raw["description"]),
+		Enabled:            amjson.Bool(raw["enabled"], true),
+		Identity:           amjson.String(raw["identityResource"]),
+		Inner:              amjson.Bool(raw["innerTreeOnly"], false),
+		MustRun:            amjson.Bool(raw["mustRun"], false),
+		NoSession:          amjson.Bool(raw["noSession"], false),
+		Transactional:      amjson.Bool(raw["transactionalOnly"], false),
+		MaximumIdleTime:    amjson.OptionalInt64(raw["maximumIdleTime"]),
+		MaximumSessionTime: amjson.OptionalInt64(raw["maximumSessionTime"]),
+		TreeTimeout:        amjson.OptionalInt64(raw["treeTimeout"]),
+		Entry:              amjson.String(raw["entryNodeId"]),
 	}
 	if ui, ok := raw["uiConfig"].(map[string]any); ok {
-		if cs := str(ui["categories"]); cs != "" && cs != "[]" {
+		if cs := amjson.String(ui["categories"]); cs != "" && cs != "[]" {
 			// stored as a JSON string
 			var cats []string
 			if err := jsonUnmarshal(cs, &cats); err != nil {
@@ -253,24 +314,24 @@ func (g *gen) ingestJourney(ctx context.Context, name string) error {
 	sort.Strings(ids)
 	for _, id := range ids {
 		meta, _ := rawNodes[id].(map[string]any)
-		nt := str(meta["nodeType"])
+		nt := amjson.String(meta["nodeType"])
 		if nt == "" {
 			return fmt.Errorf("tree node %s has no nodeType", id)
 		}
-		if err := g.ingestNode(ctx, id, nt, str(meta["displayName"])); err != nil {
+		if err := g.ingestNode(ctx, id, nt, amjson.String(meta["displayName"])); err != nil {
 			return err
 		}
 		conns := map[string]string{}
 		if c, ok := meta["connections"].(map[string]any); ok {
 			for k, v := range c {
-				conns[k] = displayConn(str(v))
+				conns[k] = displayConn(amjson.String(v))
 			}
 		}
 		j.Nodes = append(j.Nodes, emittedTreeNode{
 			ID:          id,
 			Type:        nt,
-			DisplayName: str(meta["displayName"]),
-			Version:     str(meta["version"]),
+			DisplayName: amjson.String(meta["displayName"]),
+			Version:     amjson.String(meta["version"]),
 			Connections: conns,
 		})
 	}
@@ -658,34 +719,6 @@ func displayConn(dest string) string {
 	default:
 		return dest
 	}
-}
-
-func str(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
-func boolDef(v any, def bool) bool {
-	b, ok := v.(bool)
-	if !ok {
-		return def
-	}
-	return b
-}
-
-func optionalInt64(v any) *int64 {
-	var value int64
-	switch n := v.(type) {
-	case float64:
-		value = int64(n)
-	case int64:
-		value = n
-	case int:
-		value = int64(n)
-	default:
-		return nil
-	}
-	return &value
 }
 
 func jsonUnmarshal(s string, dest any) error {

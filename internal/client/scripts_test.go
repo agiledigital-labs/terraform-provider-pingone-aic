@@ -1,16 +1,31 @@
 package client
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestScriptBodyRoundTrip(t *testing.T) {
-	source := "outcome = '✓';\n"
-	got, err := DecodeScriptBody(EncodeScriptBody(source))
-	if err != nil {
-		t.Fatal(err)
+// Script bodies are arbitrary user JavaScript, so the base64 wrapping has to be
+// total: any string must survive the round trip byte for byte.
+func FuzzScriptBodyRoundTrip(f *testing.F) {
+	for _, seed := range []string{
+		"outcome = '✓';\n",
+		"",
+		"var a = 1;",
+		"\x00\xff binary-ish",
+		strings.Repeat("x", 1024),
+	} {
+		f.Add(seed)
 	}
-	if got != source {
-		t.Fatalf("got %q, want %q", got, source)
-	}
+	f.Fuzz(func(t *testing.T, source string) {
+		got, err := DecodeScriptBody(EncodeScriptBody(source))
+		if err != nil {
+			t.Fatalf("round trip of %q failed: %v", source, err)
+		}
+		if got != source {
+			t.Fatalf("got %q, want %q", got, source)
+		}
+	})
 }
 
 func TestDecodeScriptCanonicalDefaults(t *testing.T) {

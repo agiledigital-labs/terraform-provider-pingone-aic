@@ -18,8 +18,18 @@ func validTreeInternals() map[string]any {
 }
 
 func TestValidateTreeInternalsAcceptsKnownShape(t *testing.T) {
-	if err := ValidateTreeInternals(validTreeInternals()); err != nil {
+	if err := validateTreeInternals(validTreeInternals()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The nested check is only reachable through TreeWriteBody, so callers cannot
+// half-enforce the fail-closed contract by forgetting a second call.
+func TestTreeWriteBodyRejectsNestedUnknownFields(t *testing.T) {
+	tree := validTreeInternals()
+	tree["nodes"].(map[string]any)["node-id"].(map[string]any)["newField"] = true
+	if _, err := TreeWriteBody(tree); err == nil || !strings.Contains(err.Error(), "newField") {
+		t.Fatalf("got %v, want unknown-field error", err)
 	}
 }
 
@@ -37,7 +47,7 @@ func TestValidateTreeInternalsRejectsUnknownNestedFields(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tree := validTreeInternals()
 			mutate(tree)
-			if err := ValidateTreeInternals(tree); err == nil || !strings.Contains(err.Error(), "newField") {
+			if err := validateTreeInternals(tree); err == nil || !strings.Contains(err.Error(), "newField") {
 				t.Fatalf("got %v, want unknown-field error", err)
 			}
 		})

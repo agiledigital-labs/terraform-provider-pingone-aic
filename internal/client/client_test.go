@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/testutil"
 )
 
 func TestNewRequestSetsRequiredAMHeaders(t *testing.T) {
@@ -36,13 +38,13 @@ func TestNewRequestSetsRequiredAMHeaders(t *testing.T) {
 }
 
 func TestDoReturnsInspectableAPIError(t *testing.T) {
-	httpClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+	httpClient := testutil.Client(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       io.NopCloser(strings.NewReader("missing")),
 			Header:     make(http.Header),
 		}, nil
-	})}
+	})
 	c, err := New(Config{TenantURL: "https://tenant.example", AccessToken: "token", HTTPClient: httpClient})
 	if err != nil {
 		t.Fatal(err)
@@ -59,12 +61,6 @@ func TestDoReturnsInspectableAPIError(t *testing.T) {
 	if !errors.As(err, &apiErr) || apiErr.Method != http.MethodGet {
 		t.Fatalf("unexpected API error: %#v", apiErr)
 	}
-}
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
 }
 
 func TestNewValidatesAuthenticationInputs(t *testing.T) {
