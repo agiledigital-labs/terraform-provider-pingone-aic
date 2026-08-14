@@ -36,7 +36,7 @@ unrecognised key.
 | `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go` (one generic node resource driven by each catalog `Spec`) |
 | `internal/nodetype/`  | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                |
 | `internal/oauth2client/` | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                             |
-| `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients                                                 |
+| `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients, ESVs                                           |
 | `internal/amjson/`    | coercions for AM's loosely-typed JSON, shared by resources and generate                   |
 | `internal/prefix/`    | `resource_prefix` apply/strip helpers                                                     |
 | `internal/testutil/`  | test-only helpers (fake HTTP transport); imported from `_test.go` only                    |
@@ -296,9 +296,14 @@ shapes from memory.
 
 ## Scope
 
-In scope: scripts, journeys, journey nodes, OAuth2 clients. Explicitly **out**
-of scope until that path is proven: ESVs, SAML, managed objects, IDM endpoints,
-secret mappings, the realm-wide OIDC provider service.
+In scope: scripts, journeys, journey nodes, OAuth2 clients, ESVs (variables and
+secrets). Explicitly **out** of scope until that path is proven: SAML, managed
+objects, IDM endpoints, secret mappings, the realm-wide OIDC provider service.
+
+**ESV ids cannot take `Terraform_` as a prefix.** AIC requires
+`^esv-[a-z0-9_-]{1,124}$`. `prefix.ApplyESV` lowercases the provider prefix and
+inserts it after `esv-`. **Never restart the tenant from apply.** `loaded` is
+computed; a write leaves the ESV pending until an operator restarts.
 
 ## Secrets
 

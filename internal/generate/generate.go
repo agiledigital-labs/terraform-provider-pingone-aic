@@ -37,6 +37,8 @@ type Result struct {
 	Scripts       int
 	Nodes         int
 	OAuth2Clients int
+	Variables     int
+	Secrets       int
 	Files         []string
 }
 
@@ -99,9 +101,17 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	if err := g.ingestOAuth2Clients(ctx); err != nil {
 		return nil, err
 	}
+	progressf(opt, "Listing ESVs")
+	if err := g.ingestESVs(ctx); err != nil {
+		return nil, err
+	}
 
-	res := &Result{Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes), OAuth2Clients: len(g.oauth2)}
-	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), and %d oauth2 client(s) to %s", res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, opt.OutDir)
+	res := &Result{
+		Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes),
+		OAuth2Clients: len(g.oauth2), Variables: len(g.variables), Secrets: len(g.secrets),
+	}
+	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), %d oauth2 client(s), %d variable(s), %d secret(s) to %s",
+		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, opt.OutDir)
 	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
 		return nil, err
 	}
@@ -119,6 +129,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		return nil, err
 	}
 	if err := g.writeOAuth2Clients(); err != nil {
+		return nil, err
+	}
+	if err := g.writeESVs(); err != nil {
 		return nil, err
 	}
 	res.Files = g.files
@@ -171,6 +184,8 @@ func generatedPaths(outDir string) ([]string, error) {
 		filepath.Join(outDir, "provider.tf"),
 		filepath.Join(outDir, "scripts.tf"),
 		filepath.Join(outDir, "oauth2_clients.tf"),
+		filepath.Join(outDir, "esv_variables.tf"),
+		filepath.Join(outDir, "esv_secrets.tf"),
 	}
 	for _, pattern := range []string{
 		filepath.Join(outDir, "journey_*.tf"),
@@ -235,8 +250,9 @@ func cleanGeneratedFiles(outDir string) error {
 // part-way still leaves a directory the next run is allowed to clean.
 func writeMarker(outDir string) error {
 	body := "# Written by pingoneaic-tf. This directory is regenerated: files\n" +
-		"# matching provider.tf, scripts.tf, oauth2_clients.tf, journey_*.tf and\n" +
-		"# scripts/*.js are deleted on each run. Do not keep hand-written config here.\n"
+		"# matching provider.tf, scripts.tf, oauth2_clients.tf, esv_variables.tf,\n" +
+		"# esv_secrets.tf, journey_*.tf and scripts/*.js are deleted on each run.\n" +
+		"# Do not keep hand-written config here.\n"
 	return os.WriteFile(filepath.Join(outDir, generatedMarker), []byte(body), 0o644)
 }
 
@@ -251,6 +267,8 @@ type gen struct {
 	files        []string
 	used         map[string]int
 	oauth2       []emittedOAuth2Client
+	variables    []emittedVariable
+	secrets      []emittedSecret
 }
 
 type emittedNode struct {
@@ -470,7 +488,7 @@ func (g *gen) writeProvider() error {
 provider "pingoneaic" {
   # tenant_url / credentials come from PINGONEAIC_* env vars.
   # resource_prefix defaults to "Terraform_" so applying this directory
-  # creates copies instead of overwriting the journeys and OAuth2 clients we pulled.
+  # creates copies instead of overwriting the journeys, OAuth2 clients, and ESVs we pulled.
 }
 `
 	if err := writeTerraformFile(path, []byte(body)); err != nil {

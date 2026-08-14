@@ -26,6 +26,7 @@ import (
 const (
 	AMAPIVersion       = "protocol=2.0,resource=1.0"
 	OAuth2APIVersion   = "protocol=2.1,resource=1.0"
+	ESVAPIVersion      = "resource=1.0"
 	tokenTTLSkew       = 60 * time.Second
 	assertionTTL       = 180 * time.Second
 	defaultHTTPTimeout = 60 * time.Second

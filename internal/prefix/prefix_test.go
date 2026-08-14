@@ -26,3 +26,18 @@ func TestStrip(t *testing.T) {
 		t.Fatalf("Strip unprefixed = %q", got)
 	}
 }
+
+func TestApplyESVInsertsSanitizedPrefixAfterMarker(t *testing.T) {
+	if got := ApplyESV("Terraform_", "esv-test11"); got != "esv-terraform_test11" {
+		t.Fatalf("ApplyESV = %q", got)
+	}
+	if got := ApplyESV("Terraform_", "esv-terraform_test11"); got != "esv-terraform_test11" {
+		t.Fatalf("idempotent = %q", got)
+	}
+	if got := ApplyESV("", "esv-test11"); got != "esv-test11" {
+		t.Fatalf("empty prefix = %q", got)
+	}
+	if got := StripESV("Terraform_", "esv-terraform_test11"); got != "esv-test11" {
+		t.Fatalf("StripESV = %q", got)
+	}
+}

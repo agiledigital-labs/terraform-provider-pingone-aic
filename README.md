@@ -3,7 +3,7 @@
 An **experimental** Terraform provider for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey nodes those trees
-actually use, and OAuth2 clients.
+actually use, OAuth2 clients, and ESVs (variables and secrets).
 
 This is not a JSON-passthrough wrapper around the AIC REST API. Every attribute
 is typed against a catalog we verified on a live tenant. When AIC adds, removes,
@@ -13,7 +13,9 @@ provider stays honest, and how we expect fixes to arrive (issues / PRs).
 ## Resource prefix
 
 The provider prepends a prefix to every **name** it creates (script names,
-journey names, OAuth2 client ids, inner-tree references):
+journey names, OAuth2 client ids, inner-tree references). ESV ids cannot start
+with `Terraform_` (AIC requires `esv-[a-z0-9_-]+`), so the prefix is lowercased
+and inserted after `esv-`: `esv-test11` becomes `esv-terraform_test11`.
 
 ```hcl
 provider "pingoneaic" {
@@ -38,6 +40,8 @@ not hardcoded UUIDs.
 | `pingoneaic_scripted_decision_node` | `ScriptedDecisionNode`                             |
 | `pingoneaic_journey`                | authentication tree                                |
 | `pingoneaic_oauth2_client`          | AM `/realm-config/agents/OAuth2Client/{id}`        |
+| `pingoneaic_esv_variable`           | `/environment/variables/{id}`                      |
+| `pingoneaic_esv_secret`             | `/environment/secrets/{id}`                        |
 | `pingoneaic_<type>_node`            | every other node type used by the generate catalog |
 
 `success` and `failure` are valid connection targets (AM's built-in static
@@ -123,9 +127,9 @@ terraform {
 
 ## What this experiment is _not_
 
-- A complete AIC provider. ESVs, SAML, managed objects, IDM endpoints, and
-  secret mappings are out of scope until the journey/script/OAuth2 path is
-  proven.
+- A complete AIC provider. SAML, managed objects, IDM endpoints, and
+  secret mappings are out of scope until the journey/script/OAuth2/ESV path is
+  proven. ESV writes never restart the tenant.
 - A dump of AIC's JSON. If a field is missing, that is a catalog gap, not an
   invitation to `jsonencode()`.
 

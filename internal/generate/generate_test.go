@@ -66,7 +66,7 @@ func seedDir(t *testing.T, dir string, names ...string) {
 
 func TestCleanGeneratedFilesRemovesOnlyOurOutput(t *testing.T) {
 	dir := t.TempDir()
-	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
+	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "esv_variables.tf", "esv_secrets.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
 	seedDir(t, dir, append(generated, "notes.md", generatedMarker)...)
 
 	if err := cleanGeneratedFiles(dir); err != nil {
@@ -272,6 +272,38 @@ func TestWriteOAuth2ClientsOmitsDefaultsAndPassword(t *testing.T) {
 	}
 	if !strings.Contains(body, "is_consent_implied") || !strings.Contains(body, "subject_type") {
 		t.Fatalf("non-default advanced fields missing:\n%s", body)
+	}
+}
+
+func TestWriteVariablesEmitsPlaintextAndOmitsStringDefault(t *testing.T) {
+	dir := t.TempDir()
+	g := &gen{
+		opt: Options{OutDir: dir},
+		variables: []emittedVariable{{
+			Name:  "esv-test11",
+			Label: "esv_test11",
+			Var: client.Variable{
+				ID: "esv-test11", ExpressionType: "string", Value: "test1",
+				Description: "Test variable",
+			},
+		}},
+	}
+	if err := g.writeVariables(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "esv_variables.tf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(got)
+	if !strings.Contains(body, `resource "pingoneaic_esv_variable" "esv_test11"`) {
+		t.Fatalf("missing resource:\n%s", body)
+	}
+	if strings.Contains(body, "expression_type") {
+		t.Fatalf("string is the default and should be omitted:\n%s", body)
+	}
+	if !strings.Contains(body, `"test1"`) {
+		t.Fatalf("missing value:\n%s", body)
 	}
 }
 
