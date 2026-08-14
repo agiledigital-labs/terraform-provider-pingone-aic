@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,8 +26,9 @@ import (
 type Options struct {
 	Realm    string
 	OutDir   string
-	Prefix   string   // stripped from existing names if present; not written into HCL
-	Journeys []string // empty = all
+	Prefix   string    // stripped from existing names if present; not written into HCL
+	Journeys []string  // empty = all
+	Progress io.Writer // optional human-readable progress; diagnostics belong on stderr
 }
 
 type Result struct {
@@ -57,6 +59,7 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 			return nil, err
 		}
 	}
+	progressf(opt, "Found %d journey(s) in realm %s", len(names), opt.Realm)
 
 	g := &gen{
 		c:            c,
@@ -67,7 +70,8 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		addr:         map[string]string{},
 	}
 
-	for _, name := range names {
+	for i, name := range names {
+		progressf(opt, "[%d/%d] Reading journey %q", i+1, len(names), name)
 		if err := g.ingestJourney(ctx, name); err != nil {
 			return nil, fmt.Errorf("journey %s: %w", name, err)
 		}
@@ -77,6 +81,7 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	for _, n := range g.nodes {
 		if n.Spec.APIType == "ScriptedDecisionNode" {
 			if sid, _ := n.Values["script_id"].(string); sid != "" {
+				progressf(opt, "Reading script %s", sid)
 				if err := g.ingestScript(ctx, sid); err != nil {
 					return nil, fmt.Errorf("script %s (from node %s): %w", sid, n.ID, err)
 				}
@@ -85,6 +90,7 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	}
 
 	res := &Result{Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes)}
+	progressf(opt, "Writing %d journey(s), %d script(s), and %d node(s) to %s", res.Journeys, res.Scripts, res.Nodes, opt.OutDir)
 	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
 		return nil, err
 	}
@@ -100,6 +106,12 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	}
 	res.Files = g.files
 	return res, nil
+}
+
+func progressf(opt Options, format string, args ...any) {
+	if opt.Progress != nil {
+		fmt.Fprintf(opt.Progress, format+"\n", args...)
+	}
 }
 
 func selectJourneys(available, requested []string) ([]string, error) {
@@ -268,6 +280,7 @@ func (g *gen) ingestNode(ctx context.Context, id, apiType, hint string) error {
 	if !ok {
 		return fmt.Errorf("node %s has unmodelled type %s — add it to internal/nodetype/catalog.go", id, apiType)
 	}
+	progressf(g.opt, "Reading node %s/%s", apiType, id)
 	raw, err := g.c.GetNode(ctx, g.opt.Realm, apiType, id)
 	if err != nil {
 		return fmt.Errorf("GET %s/%s: %w", apiType, id, err)

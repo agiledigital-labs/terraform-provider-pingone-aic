@@ -13,7 +13,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/generate"
@@ -55,11 +57,14 @@ func main() {
 		}
 	}
 
-	res, err := generate.Run(context.Background(), c, generate.Options{
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	res, err := generate.Run(ctx, c, generate.Options{
 		Realm:    *realm,
 		OutDir:   *out,
 		Prefix:   *prefix,
 		Journeys: list,
+		Progress: os.Stderr,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "generate:", err)

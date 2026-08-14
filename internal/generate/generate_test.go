@@ -1,11 +1,18 @@
 package generate
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
 )
 
 func TestSanitizeIdent(t *testing.T) {
@@ -78,6 +85,40 @@ func TestWriteTerraformFileFormatsHCL(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("formatted HCL:\n%s\nwant:\n%s", got, want)
 	}
+}
+
+func TestProgressfIsOptionalAndReadable(t *testing.T) {
+	progressf(Options{}, "ignored %d", 1)
+	var out bytes.Buffer
+	progressf(Options{Progress: &out}, "read %d journey", 1)
+	if got, want := out.String(), "read 1 journey\n"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRunHonorsCancelledContext(t *testing.T) {
+	httpClient := &http.Client{Transport: generateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})}
+	c, err := client.New(client.Config{
+		TenantURL: "https://tenant.example", AccessToken: "token", HTTPClient: httpClient,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = Run(ctx, c, Options{OutDir: t.TempDir(), Progress: io.Discard})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v, want context cancellation", err)
+	}
+}
+
+type generateRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f generateRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func TestDisplayConn(t *testing.T) {
