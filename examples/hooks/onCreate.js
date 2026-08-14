@@ -1,0 +1,1 @@
+require('onCreateUser').setDefaultFields(object);

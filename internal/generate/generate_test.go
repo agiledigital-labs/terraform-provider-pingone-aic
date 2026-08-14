@@ -34,6 +34,13 @@ func TestSanitizeIdent(t *testing.T) {
 	}
 }
 
+func TestHclFileIsModuleRelative(t *testing.T) {
+	got := hclFile(filepath.Join("hooks", "probe.onCreate.js"))
+	if got != `file("${path.module}/hooks/probe.onCreate.js")` {
+		t.Fatalf("got %s", got)
+	}
+}
+
 func TestSelectJourneysRejectsMissingNames(t *testing.T) {
 	got, err := selectJourneys([]string{"One", "Two"}, []string{"Two", "Missing"})
 	if err == nil || !strings.Contains(err.Error(), "Missing") {

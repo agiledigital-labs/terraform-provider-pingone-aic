@@ -82,7 +82,7 @@ func (r *idmScheduleResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"repeat_interval":      schema.Int64Attribute{Optional: true},
 			"managed_object":       schema.StringAttribute{Optional: true},
 			"script_property":      schema.StringAttribute{Optional: true},
-			"source":               schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext JavaScript."},
+			"source":               schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext JavaScript. Inline a string or, preferably, `source = file(\"${path.module}/schedules/foo.js\")`."},
 			"script_type":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("text/javascript")},
 			"number_of_threads":    schema.Int64Attribute{Optional: true},
 			"wait_for_completion":  schema.BoolAttribute{Optional: true},

@@ -121,13 +121,13 @@ func (r *managedObjectResource) Schema(_ context.Context, _ resource.SchemaReque
 				NestedObject: schema.NestedBlockObject{Attributes: propAttrs},
 			},
 			"hook": schema.SetNestedBlock{
-				MarkdownDescription: "A lifecycle script (`onCreate`, `onUpdate`, `onDelete`, `postCreate`, `postUpdate`, `postDelete`, or any other javascript source/file sibling of `schema`). Inline `source` is plaintext; `file` is a product path the config API cannot read. Order is not significant.",
+				MarkdownDescription: "A lifecycle script (`onCreate`, `onUpdate`, `onDelete`, `postCreate`, `postUpdate`, `postDelete`, or any other javascript source/file sibling of `schema`). `source` is the JS body — prefer `source = file(\"${path.module}/hooks/….js\")` over an inline string. `file` is an IDM product path the config API cannot read, not a local Terraform path. Order is not significant.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"event":  schema.StringAttribute{Required: true, MarkdownDescription: "Top-level hook key, e.g. `onCreate`."},
 						"type":   schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("text/javascript")},
-						"source": schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext JavaScript body."},
-						"file":   schema.StringAttribute{Optional: true, MarkdownDescription: "Server-side file path for stock Ping hooks."},
+						"source": schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext JavaScript body. Inline a string or, preferably, `source = file(\"${path.module}/hooks/onCreate.js\")`."},
+						"file":   schema.StringAttribute{Optional: true, MarkdownDescription: "IDM product file path for stock Ping hooks (not a local Terraform path)."},
 					},
 				},
 			},

@@ -79,7 +79,7 @@ func (g *gen) writeEndpoints() error {
 		return err
 	}
 	var b strings.Builder
-	b.WriteString("# Generated IDM custom endpoints. Inline source lives in endpoints/*.js.\n")
+	b.WriteString("# Generated IDM custom endpoints. source = file(...) points at endpoints/*.js.\n")
 	b.WriteString("# File-backed product endpoints keep `file` and have no extracted source.\n\n")
 	for _, e := range g.endpoints {
 		ep := e.EP
@@ -109,7 +109,7 @@ func (g *gen) writeEndpoints() error {
 				return err
 			}
 			g.files = append(g.files, filepath.Join(g.opt.OutDir, rel))
-			b.WriteString(fmt.Sprintf("  source = file(%s)\n", hclString(rel)))
+			b.WriteString(fmt.Sprintf("  source = %s\n", hclFile(rel)))
 		}
 		b.WriteString("}\n\n")
 	}
@@ -130,7 +130,7 @@ func (g *gen) writeSchedules() error {
 	}
 	var b strings.Builder
 	b.WriteString("# Generated IDM schedules. enabled is omitted (defaults false) so copies cannot fire.\n")
-	b.WriteString("# Inline scripts live in schedules/*.js.\n\n")
+	b.WriteString("# source = file(...) points at schedules/*.js.\n\n")
 	for _, e := range g.schedules {
 		s := e.Sched
 		if e.WasOn {
@@ -199,7 +199,7 @@ func (g *gen) writeSchedules() error {
 				return err
 			}
 			g.files = append(g.files, filepath.Join(g.opt.OutDir, rel))
-			b.WriteString(fmt.Sprintf("  source = file(%s)\n", hclString(rel)))
+			b.WriteString(fmt.Sprintf("  source = %s\n", hclFile(rel)))
 		}
 		b.WriteString("}\n\n")
 	}

@@ -55,7 +55,8 @@ func (g *gen) writeManaged() error {
 	var b strings.Builder
 	b.WriteString("# Generated custom managed-object types. Ping-shipped objects (alpha_user, …) are skipped.\n")
 	b.WriteString("# Applying creates prefixed copies and remaps managed/ relationship paths. Writes confirm they landed.\n")
-	b.WriteString("# Lifecycle hooks stay on this type — they are never written onto alpha_user / bravo_user.\n\n")
+	b.WriteString("# Lifecycle hooks stay on this type — they are never written onto alpha_user / bravo_user.\n")
+	b.WriteString("# hook.source uses file() into hooks/*.js; hook.file is an IDM product path.\n\n")
 	for _, e := range g.managed {
 		o := e.Obj
 		b.WriteString(fmt.Sprintf("resource \"pingoneaic_managed_object\" %q {\n", e.Label))
@@ -145,7 +146,7 @@ func (g *gen) writeManaged() error {
 					return err
 				}
 				g.files = append(g.files, filepath.Join(g.opt.OutDir, rel))
-				b.WriteString(fmt.Sprintf("    source = file(%s)\n", hclString(rel)))
+				b.WriteString(fmt.Sprintf("    source = %s\n", hclFile(rel)))
 			}
 			b.WriteString("  }\n")
 		}

@@ -53,8 +53,8 @@ func (r *idmEndpointResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"name":        schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, MarkdownDescription: "Logical endpoint name without the `endpoint/` prefix."},
 			"remote_name": schema.StringAttribute{Computed: true},
 			"type":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("text/javascript")},
-			"source":      schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext script body."},
-			"file":        schema.StringAttribute{Optional: true, MarkdownDescription: "Product file path for file-backed endpoints."},
+			"source":      schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext script body. Inline a string or, preferably, `source = file(\"${path.module}/endpoints/foo.js\")`."},
+			"file":        schema.StringAttribute{Optional: true, MarkdownDescription: "IDM product file path for file-backed endpoints (not a local Terraform path)."},
 			"description": schema.StringAttribute{Optional: true},
 			"context":     schema.StringAttribute{Optional: true},
 			"globals_object": schema.StringAttribute{

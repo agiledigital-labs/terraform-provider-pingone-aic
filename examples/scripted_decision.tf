@@ -2,9 +2,7 @@ resource "pingoneaic_script" "probe" {
   realm   = "alpha"
   name    = "Example Probe"
   context = "AUTHENTICATION_TREE_DECISION_NODE"
-  source  = <<-JS
-    outcome = "ok";
-  JS
+  source  = file("${path.module}/scripts/probe.js")
 }
 
 resource "pingoneaic_scripted_decision_node" "probe" {

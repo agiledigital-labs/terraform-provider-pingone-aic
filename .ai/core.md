@@ -186,7 +186,10 @@ skips default-valued fields (`EqualDefault`) so emitted HCL stays reviewable.
 `KindESVString` handles wrap/unwrap. Terraform sees the bare `&{…}` string.
 
 **Scripts.** `source` is plaintext in HCL; the client base64-encodes on the
-wire. Always send `evaluator_version` (`2.0` default) — omitting it creates a
+wire. Prefer `source = file("${path.module}/scripts/foo.js")` over an inline
+string — generate emits that form. The same `file()` link works for IDM
+endpoint, schedule, and managed-object hook `source`. The `file` *attribute*
+on those resources is an IDM product path, not a local file. Always send `evaluator_version` (`2.0` default) — omitting it creates a
 legacy v1 engine script. `SCRIPTED_DECISION_NODE` is accepted on write but AM
 stores `AUTHENTICATION_TREE_DECISION_NODE`; re-read after create rather than
 trusting the request form (`client.CanonicalContext`).

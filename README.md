@@ -51,6 +51,11 @@ not hardcoded UUIDs.
 `success` and `failure` are valid connection targets (AM's built-in static
 nodes). `x` / `y` are optional visual chrome and are omitted from generated HCL.
 
+`source` is the script body. Point it at a `.js` file with
+`source = file("${path.module}/scripts/foo.js")` (generate does this) or inline
+a heredoc if you prefer. `file` on an endpoint, schedule, or hook is an IDM
+**product** path (`roles/onDelete-roles.js`), not a local Terraform path.
+
 `pingoneaic_journey` also carries the tree-level session settings
 `maximum_idle_time`, `maximum_session_time` and `tree_timeout` (optional; AM
 supplies them when unset), and each `node` block takes an optional `version`

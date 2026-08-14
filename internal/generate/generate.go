@@ -560,7 +560,7 @@ func (g *gen) writeScripts() error {
 		if s.Description != "" {
 			b.WriteString(fmt.Sprintf("  description = %s\n", hclString(s.Description)))
 		}
-		b.WriteString(fmt.Sprintf("  source = file(%s)\n", hclString(rel)))
+		b.WriteString(fmt.Sprintf("  source = %s\n", hclFile(rel)))
 		b.WriteString("}\n\n")
 	}
 	path := filepath.Join(g.opt.OutDir, "scripts.tf")
@@ -785,6 +785,12 @@ func jsonUnmarshal(s string, dest any) error {
 
 func hclString(s string) string {
 	return strconv.Quote(s)
+}
+
+// hclFile is a module-relative file() so generated HCL links to the extracted
+// .js instead of inlining the body. rel uses slashes (Terraform paths).
+func hclFile(rel string) string {
+	return fmt.Sprintf(`file("${path.module}/%s")`, filepath.ToSlash(rel))
 }
 
 func hclStringList(items []string) string {

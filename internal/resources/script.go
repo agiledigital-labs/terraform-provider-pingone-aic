@@ -89,7 +89,7 @@ func (r *scriptResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			},
 			"source": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Plaintext script body.",
+				MarkdownDescription: "Plaintext script body. Inline a string or, preferably, `source = file(\"${path.module}/scripts/foo.js\")`.",
 			},
 		},
 	}

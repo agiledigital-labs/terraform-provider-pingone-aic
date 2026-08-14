@@ -14,11 +14,11 @@ resource "pingoneaic_managed_object" "probe" {
   # type — they do not attach to alpha_user.
   hook {
     event  = "onCreate"
-    source = "require('onCreateUser').setDefaultFields(object);"
+    source = file("${path.module}/hooks/onCreate.js")
   }
 
   hook {
     event  = "onUpdate"
-    source = "require('onUpdateUser').preserveLastSync(object, oldObject, request);"
+    source = file("${path.module}/hooks/onUpdate.js")
   }
 }
