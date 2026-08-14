@@ -32,20 +32,23 @@ type journeyResource struct {
 }
 
 type journeyModel struct {
-	ID                types.String       `tfsdk:"id"`
-	Realm             types.String       `tfsdk:"realm"`
-	Name              types.String       `tfsdk:"name"`
-	RemoteName        types.String       `tfsdk:"remote_name"`
-	Description       types.String       `tfsdk:"description"`
-	Enabled           types.Bool         `tfsdk:"enabled"`
-	IdentityResource  types.String       `tfsdk:"identity_resource"`
-	InnerTreeOnly     types.Bool         `tfsdk:"inner_tree_only"`
-	MustRun           types.Bool         `tfsdk:"must_run"`
-	NoSession         types.Bool         `tfsdk:"no_session"`
-	TransactionalOnly types.Bool         `tfsdk:"transactional_only"`
-	EntryNode         types.String       `tfsdk:"entry_node"`
-	Categories        types.List         `tfsdk:"categories"`
-	Nodes             []journeyNodeModel `tfsdk:"node"`
+	ID                 types.String       `tfsdk:"id"`
+	Realm              types.String       `tfsdk:"realm"`
+	Name               types.String       `tfsdk:"name"`
+	RemoteName         types.String       `tfsdk:"remote_name"`
+	Description        types.String       `tfsdk:"description"`
+	Enabled            types.Bool         `tfsdk:"enabled"`
+	IdentityResource   types.String       `tfsdk:"identity_resource"`
+	InnerTreeOnly      types.Bool         `tfsdk:"inner_tree_only"`
+	MustRun            types.Bool         `tfsdk:"must_run"`
+	NoSession          types.Bool         `tfsdk:"no_session"`
+	TransactionalOnly  types.Bool         `tfsdk:"transactional_only"`
+	MaximumIdleTime    types.Int64        `tfsdk:"maximum_idle_time"`
+	MaximumSessionTime types.Int64        `tfsdk:"maximum_session_time"`
+	TreeTimeout        types.Int64        `tfsdk:"tree_timeout"`
+	EntryNode          types.String       `tfsdk:"entry_node"`
+	Categories         types.List         `tfsdk:"categories"`
+	Nodes              []journeyNodeModel `tfsdk:"node"`
 }
 
 type journeyNodeModel struct {
@@ -93,7 +96,19 @@ func (r *journeyResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"must_run":           schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false)},
 			"no_session":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false)},
 			"transactional_only": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false)},
-			"entry_node":         schema.StringAttribute{Required: true, MarkdownDescription: "UUID of the first node."},
+			"maximum_idle_time": schema.Int64Attribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Maximum idle time reported by AM for the journey.",
+			},
+			"maximum_session_time": schema.Int64Attribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Maximum session time reported by AM for the journey.",
+			},
+			"tree_timeout": schema.Int64Attribute{
+				Optional: true, Computed: true,
+				MarkdownDescription: "Authentication tree timeout reported by AM.",
+			},
+			"entry_node": schema.StringAttribute{Required: true, MarkdownDescription: "UUID of the first node."},
 			"categories": schema.ListAttribute{
 				Optional:            true,
 				ElementType:         types.StringType,
@@ -289,6 +304,15 @@ func modelToTree(plan journeyModel, pfx string) (map[string]any, error) {
 			"startNode":          map[string]any{"x": 50.0, "y": 200.0},
 		},
 	}
+	for name, value := range map[string]types.Int64{
+		"maximumIdleTime":    plan.MaximumIdleTime,
+		"maximumSessionTime": plan.MaximumSessionTime,
+		"treeTimeout":        plan.TreeTimeout,
+	} {
+		if !value.IsNull() && !value.IsUnknown() {
+			body[name] = value.ValueInt64()
+		}
+	}
 	if !plan.Description.IsNull() && plan.Description.ValueString() != "" {
 		body["description"] = plan.Description.ValueString()
 	}
@@ -410,21 +434,37 @@ func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyMode
 	}
 
 	return journeyModel{
-		ID:                types.StringValue(remote),
-		Realm:             plan.Realm,
-		Name:              types.StringValue(name),
-		RemoteName:        types.StringValue(remote),
-		Description:       desc,
-		Enabled:           types.BoolValue(boolish(raw["enabled"], true)),
-		IdentityResource:  idRes,
-		InnerTreeOnly:     types.BoolValue(boolish(raw["innerTreeOnly"], false)),
-		MustRun:           types.BoolValue(boolish(raw["mustRun"], false)),
-		NoSession:         types.BoolValue(boolish(raw["noSession"], false)),
-		TransactionalOnly: types.BoolValue(boolish(raw["transactionalOnly"], false)),
-		EntryNode:         types.StringValue(entry),
-		Categories:        cats,
-		Nodes:             nodes,
+		ID:                 types.StringValue(remote),
+		Realm:              plan.Realm,
+		Name:               types.StringValue(name),
+		RemoteName:         types.StringValue(remote),
+		Description:        desc,
+		Enabled:            types.BoolValue(boolish(raw["enabled"], true)),
+		IdentityResource:   idRes,
+		InnerTreeOnly:      types.BoolValue(boolish(raw["innerTreeOnly"], false)),
+		MustRun:            types.BoolValue(boolish(raw["mustRun"], false)),
+		NoSession:          types.BoolValue(boolish(raw["noSession"], false)),
+		TransactionalOnly:  types.BoolValue(boolish(raw["transactionalOnly"], false)),
+		MaximumIdleTime:    int64ish(raw["maximumIdleTime"]),
+		MaximumSessionTime: int64ish(raw["maximumSessionTime"]),
+		TreeTimeout:        int64ish(raw["treeTimeout"]),
+		EntryNode:          types.StringValue(entry),
+		Categories:         cats,
+		Nodes:              nodes,
 	}, nil
+}
+
+func int64ish(v any) types.Int64 {
+	switch n := v.(type) {
+	case float64:
+		return types.Int64Value(int64(n))
+	case int64:
+		return types.Int64Value(n)
+	case int:
+		return types.Int64Value(int64(n))
+	default:
+		return types.Int64Null()
+	}
 }
 
 func str(m map[string]any, k string) string {
