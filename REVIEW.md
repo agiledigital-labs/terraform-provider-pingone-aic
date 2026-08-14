@@ -14,8 +14,8 @@ findings). Each should name the guard that will eventually retire it.
   AM key is absent, Terraform aborts with "Provider produced inconsistent result
   after apply". Check the missing-key case, not just the present-key case.
   _Guard: `TestTreeToModelDefaultsNodeVersionWhenAMOmitsIt` covers node
-  `version`; no equivalent yet for script `evaluator_version` (see open question
-  below)._
+  `version`. Script `evaluator_version` was checked against the tenant and is
+  not affected — see Verified against._
 - **Know what a resource is keyed by before reasoning about renames.**
   `resource_prefix` is provider-level, so changing it never triggers
   `RequiresReplace`. Name-keyed resources (journeys/trees) must resolve every
@@ -31,6 +31,11 @@ findings). Each should name the guard that will eventually retire it.
 - **Destructive filesystem work needs a marker, not just a matching name.**
   Anything that deletes under a user-supplied path must prove the directory is
   ours first. _Guard: `TestCleanGeneratedFilesRefusesUnmarkedDirectory`._
+- **Fail-closed allowlists must be validated against a live tenant sweep, not
+  hand-written fixtures.** Fetch every object of the type and run the real
+  bodies through the validator; a shape you did not think of is exactly what the
+  allowlist will reject in production. _Guard: none automated — the sweep is
+  manual. A `-tags live` test reading a fixture directory would retire it._
 
 ## Findings log
 
@@ -95,15 +100,50 @@ findings). Each should name the guard that will eventually retire it.
   describes a user-visible scenario, check that it calls the code path the user
   would hit, not the helper underneath it.
 
+### 2026-08-14 — Allowlist rejected a shape a sixth of the tenant carries
+
+- **What:** `treeUIAttrs` allowed only `uiConfig.categories`, so every journey
+  carrying the editor's canvas layout was rejected — generate aborted and the
+  provider could not Read the resource. 6 of 35 trees on the sandbox carry
+  `uiConfig.annotations`.
+- **Why missed:** the allowlist was written from the fields the provider models,
+  not from what AM returns, and its tests only exercised hand-constructed
+  bodies. Nothing in the review or the test suite ever fed a real tenant
+  response through it. A fail-closed allowlist is only as good as the survey
+  behind it.
+- **Guard:** applied — `annotations` accepted, with both live shapes as
+  regression cases. Promoted to Standing check 5.
+
+## Verified against
+
+Sandbox tenant, `alpha` realm, 2026-08-14 — 35 trees / 177 nodes / 127 scripts.
+
+- `uiConfig` keys observed: `categories` (18), `annotations` (6). `annotations`
+  is a JSON **string**, `{"forNodes":…,"structural":…}`.
+- `staticNodes` absent entirely on 3 of 35 trees; entries only ever hold
+  `x`/`y`.
+- Tree node keys are exactly `connections`, `displayName`, `nodeType`,
+  `version`, `x`, `y` — all present on all 177 nodes; `version` is `"1.0"`
+  everywhere.
+- `maximumIdleTime` / `maximumSessionTime` / `treeTimeout` appear on **no**
+  tree, but a PUT carrying them returns 201 and both the PUT and a follow-up GET
+  echo the values. They are real, writable, and simply omitted when unset — so
+  modelling them Optional+Computed with a null decode is correct.
+- `evaluatorVersion` is present on **all 127** scripts (88 × `"1.0"`, 39 ×
+  `"2.0"`). `decodeScript`'s `"1.0"` fallback never fires, so the open question
+  below is resolved: **not a defect**. `"1.0"` really is the legacy engine, and
+  importing such a script correctly diffs against the `"2.0"` schema default.
+
+Probes used a `Terraform_`-prefixed throwaway tree and one scratch script; both
+were deleted and confirmed 404 afterwards.
+
 ## Open questions
 
-- **`evaluator_version` may be the same defect class as node `version`.** The
-  schema defaults to `"2.0"` (`internal/resources/script.go`) but `decodeScript`
-  falls back to `"1.0"` when AM omits `evaluatorVersion`. Unlike node `version`,
-  `"1.0"` is a _meaningful observed value_ (legacy v1 engine), so blindly
-  aligning them would mislabel legacy scripts. Needs a live-tenant check of
-  whether AM ever omits `evaluatorVersion` in a PUT response before deciding. Do
-  not "fix" it from first principles.
+- **`modelToTree` drops `uiConfig.annotations` on write.** It rebuilds
+  `uiConfig` from `categories` alone, so adopting an annotated journey and
+  updating it discards the saved canvas layout. Journeys this provider creates
+  have none, so it only bites on import. Fix would be to round-trip the raw
+  value through state.
 - **No linter beyond gofmt/go vet.** None of the defects above are
   vet-detectable. Proposed: `golangci-lint` in the flake and the `.#ci` shell
   with `errcheck`, `gocritic`, `dupl`, `unparam`. Deferred as its own slice —
