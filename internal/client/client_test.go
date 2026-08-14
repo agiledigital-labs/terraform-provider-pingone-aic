@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -60,6 +61,33 @@ func TestDoReturnsInspectableAPIError(t *testing.T) {
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || apiErr.Method != http.MethodGet {
 		t.Fatalf("unexpected API error: %#v", apiErr)
+	}
+}
+
+// A 404 that some layer has wrapped with %w must still read as "gone" —
+// otherwise Read() surfaces an error instead of dropping the resource from
+// state, and Terraform never converges. See client.IsNotFound.
+func TestIsNotFoundSeesThroughWrapping(t *testing.T) {
+	notFound := &APIError{Status: http.StatusNotFound, Method: http.MethodGet, URL: "/gone"}
+	cases := map[string]struct {
+		err  error
+		want bool
+	}{
+		"bare":          {notFound, true},
+		"wrapped once":  {fmt.Errorf("read node: %w", notFound), true},
+		"wrapped twice": {fmt.Errorf("journey: %w", fmt.Errorf("read node: %w", notFound)), true},
+		"other status":  {&APIError{Status: http.StatusForbidden}, false},
+		"wrapped 403":   {fmt.Errorf("read node: %w", &APIError{Status: http.StatusForbidden}), false},
+		"unrelated":     {errors.New("boom"), false},
+		"wrapped plain": {fmt.Errorf("read node: %w", errors.New("boom")), false},
+		"nil":           {nil, false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := IsNotFound(tc.err); got != tc.want {
+				t.Fatalf("IsNotFound(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 

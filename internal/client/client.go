@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -246,8 +247,11 @@ func IsNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
-	as, ok := err.(*APIError)
-	return ok && as.NotFound()
+	// errors.As, not a type assertion: a 404 that any layer has wrapped with
+	// %w must still read as "gone", or Read() reports an error instead of
+	// dropping the resource from state.
+	var as *APIError
+	return errors.As(err, &as) && as.NotFound()
 }
 
 func truncate(b []byte, n int) string {
