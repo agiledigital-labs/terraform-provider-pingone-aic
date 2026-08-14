@@ -1,0 +1,37 @@
+# Local resources (template)
+
+Copy this file to `.ai/local.md` and fill it in. `local.md` is **gitignored** —
+it records things that are true of *your machine only*, so that every AI agent
+working here (Claude, Codex, Antigravity, …) can find the same local resources.
+
+Rules:
+
+- Machine-specific paths go here; everything repo-universal goes in
+  [core.md](core.md).
+- **No secrets.** No tokens, JWKs, passwords, or tenant credentials — not even
+  "temporarily". Point at how to obtain them instead.
+- Keep it short. It is a set of pointers, not documentation.
+
+## AIC API reference
+
+The verified AIC API doc set lives in the sibling project
+[`agiledigital-labs/pingone-aic-manager`](https://github.com/agiledigital-labs/pingone-aic-manager)
+under `docs/api/`. `core.md` explains why it is authoritative; record where your
+checkout is:
+
+```
+<path-to>/pingone-aic-manager/docs/api/
+```
+
+If you don't have it: `git clone git@github.com:agiledigital-labs/pingone-aic-manager.git`
+somewhere alongside this repo.
+
+## Tenant
+
+Which tenant you develop against, and how to get a token — the *method*, never
+the token itself. For example, a helper script that shells out to an already
+unlocked `aic` agent.
+
+## Anything else machine-local
+
+Other sibling checkouts, local tool builds, scratch directories.

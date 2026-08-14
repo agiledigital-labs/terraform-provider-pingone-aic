@@ -22,15 +22,22 @@ terraform.rc
 /generated/
 /examples/**/terraform.tfstate*
 
-# Local aic agent leftovers if someone runs `aic` from this checkout
-.aic/
-
 # Secrets — never commit JWKs, tokens, or env files
 *.jwk
 *.pem
 .env
 .env.*
+.envrc
+.direnv/
 .token-cache
+get-token.sh
+
+# aic CLI agent runtime state (socket, pid, log)
+/.aic/
+
+# Machine-local AI agent notes (paths to sibling checkouts etc).
+# .ai/core.md IS committed; local.md is not. See .ai/local.md.example.
+/.ai/local.md
 
 # Editor / OS
 .idea/
