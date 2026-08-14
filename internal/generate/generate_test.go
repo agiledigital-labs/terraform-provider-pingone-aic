@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/oauth2client"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/testutil"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
@@ -65,7 +66,7 @@ func seedDir(t *testing.T, dir string, names ...string) {
 
 func TestCleanGeneratedFilesRemovesOnlyOurOutput(t *testing.T) {
 	dir := t.TempDir()
-	generated := []string{"provider.tf", "scripts.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
+	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
 	seedDir(t, dir, append(generated, "notes.md", generatedMarker)...)
 
 	if err := cleanGeneratedFiles(dir); err != nil {
@@ -207,6 +208,70 @@ func TestDisplayConn(t *testing.T) {
 	}
 	if displayConn("e301438c-0bd0-429c-ab0c-66126501069a") != "failure" {
 		t.Fatal("failure sentinel")
+	}
+}
+
+func TestWriteOAuth2ClientsOmitsDefaultsAndPassword(t *testing.T) {
+	dir := t.TempDir()
+	g := &gen{
+		opt: Options{OutDir: dir, Realm: "alpha"},
+		oauth2: []emittedOAuth2Client{{
+			Name:  "service_C1",
+			Label: "service_c1",
+			Values: oauth2client.Values{
+				"core": {
+					"client_type":           "Confidential",
+					"status":                "Active",
+					"scopes":                []string{"c1"},
+					"access_token_lifetime": int64(3600),
+					"userpassword":          nil,
+				},
+				"advanced": {
+					"grant_types":                []string{"client_credentials"},
+					"token_endpoint_auth_method": "client_secret_basic",
+					"is_consent_implied":         true,
+					"subject_type":               "Public",
+				},
+				"override": {
+					"provider_overrides_enabled": false,
+				},
+			},
+		}},
+	}
+	if err := g.writeOAuth2Clients(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "oauth2_clients.tf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(got)
+	if !strings.Contains(body, `resource "pingoneaic_oauth2_client" "service_c1"`) {
+		t.Fatalf("missing resource:\n%s", body)
+	}
+	if !strings.Contains(body, `name  = "service_C1"`) {
+		t.Fatalf("missing name:\n%s", body)
+	}
+	if !strings.Contains(body, `scopes                 = ["c1"]`) && !strings.Contains(body, `scopes = ["c1"]`) {
+		// formatted HCL may align equals
+		if !strings.Contains(body, `["c1"]`) {
+			t.Fatalf("missing scopes:\n%s", body)
+		}
+	}
+	if strings.Contains(body, "userpassword =") {
+		t.Fatal("must not emit userpassword")
+	}
+	if strings.Contains(body, `client_type`) {
+		t.Fatalf("Confidential is the template default and should be omitted:\n%s", body)
+	}
+	if strings.Contains(body, "token_endpoint_auth_method") {
+		t.Fatalf("client_secret_basic is the template default and should be omitted:\n%s", body)
+	}
+	if strings.Contains(body, "provider_overrides_enabled") {
+		t.Fatalf("false override default should be omitted:\n%s", body)
+	}
+	if !strings.Contains(body, "is_consent_implied") || !strings.Contains(body, "subject_type") {
+		t.Fatalf("non-default advanced fields missing:\n%s", body)
 	}
 }
 

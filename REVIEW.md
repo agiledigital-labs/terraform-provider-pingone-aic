@@ -18,10 +18,11 @@ findings). Each should name the guard that will eventually retire it.
   not affected — see Verified against._
 - **Know what a resource is keyed by before reasoning about renames.**
   `resource_prefix` is provider-level, so changing it never triggers
-  `RequiresReplace`. Name-keyed resources (journeys/trees) must resolve every
+  `RequiresReplace`. Name-keyed resources (journeys/trees, OAuth2 clients) must resolve every
   CRUD path from the persisted id or an update orphans the original; UUID-keyed
   resources (scripts) rename in place and are fine. _Guard:
-  `TestJourneyWriteTargetsPersistedTreeAfterPrefixChange`. Add the equivalent
+  `TestJourneyWriteTargetsPersistedTreeAfterPrefixChange` and
+  `TestOAuth2RemoteNamePersistsAcrossPrefixChange`. Add the equivalent
   for any new name-keyed resource._
 - **Fail-closed validators must be reachable from one entry point.** This repo's
   core rule (unknown key = error) only holds if every caller runs every

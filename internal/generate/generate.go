@@ -1,4 +1,4 @@
-// Package generate pulls live AIC journeys/scripts and emits reviewable HCL.
+// Package generate pulls live AIC journeys/scripts/OAuth2 clients and emits reviewable HCL.
 //
 // It refuses to dump raw JSON: every node field must be in the typed catalog,
 // every tree key must be modelled, and defaults are omitted so the files stay
@@ -33,10 +33,11 @@ type Options struct {
 }
 
 type Result struct {
-	Journeys int
-	Scripts  int
-	Nodes    int
-	Files    []string
+	Journeys      int
+	Scripts       int
+	Nodes         int
+	OAuth2Clients int
+	Files         []string
 }
 
 func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
@@ -94,8 +95,13 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		}
 	}
 
-	res := &Result{Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes)}
-	progressf(opt, "Writing %d journey(s), %d script(s), and %d node(s) to %s", res.Journeys, res.Scripts, res.Nodes, opt.OutDir)
+	progressf(opt, "Listing OAuth2 clients in realm %s", opt.Realm)
+	if err := g.ingestOAuth2Clients(ctx); err != nil {
+		return nil, err
+	}
+
+	res := &Result{Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes), OAuth2Clients: len(g.oauth2)}
+	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), and %d oauth2 client(s) to %s", res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, opt.OutDir)
 	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
 		return nil, err
 	}
@@ -110,6 +116,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		return nil, err
 	}
 	if err := g.writeJourneys(); err != nil {
+		return nil, err
+	}
+	if err := g.writeOAuth2Clients(); err != nil {
 		return nil, err
 	}
 	res.Files = g.files
@@ -161,6 +170,7 @@ func generatedPaths(outDir string) ([]string, error) {
 	paths := []string{
 		filepath.Join(outDir, "provider.tf"),
 		filepath.Join(outDir, "scripts.tf"),
+		filepath.Join(outDir, "oauth2_clients.tf"),
 	}
 	for _, pattern := range []string{
 		filepath.Join(outDir, "journey_*.tf"),
@@ -225,8 +235,8 @@ func cleanGeneratedFiles(outDir string) error {
 // part-way still leaves a directory the next run is allowed to clean.
 func writeMarker(outDir string) error {
 	body := "# Written by pingoneaic-tf. This directory is regenerated: files\n" +
-		"# matching provider.tf, scripts.tf, journey_*.tf and scripts/*.js are\n" +
-		"# deleted on each run. Do not keep hand-written config here.\n"
+		"# matching provider.tf, scripts.tf, oauth2_clients.tf, journey_*.tf and\n" +
+		"# scripts/*.js are deleted on each run. Do not keep hand-written config here.\n"
 	return os.WriteFile(filepath.Join(outDir, generatedMarker), []byte(body), 0o644)
 }
 
@@ -240,6 +250,7 @@ type gen struct {
 	addr         map[string]string
 	files        []string
 	used         map[string]int
+	oauth2       []emittedOAuth2Client
 }
 
 type emittedNode struct {
@@ -459,7 +470,7 @@ func (g *gen) writeProvider() error {
 provider "pingoneaic" {
   # tenant_url / credentials come from PINGONEAIC_* env vars.
   # resource_prefix defaults to "Terraform_" so applying this directory
-  # creates copies instead of overwriting the journeys we pulled.
+  # creates copies instead of overwriting the journeys and OAuth2 clients we pulled.
 }
 `
 	if err := writeTerraformFile(path, []byte(body)); err != nil {

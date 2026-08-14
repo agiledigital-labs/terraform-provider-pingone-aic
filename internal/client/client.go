@@ -25,6 +25,7 @@ import (
 
 const (
 	AMAPIVersion       = "protocol=2.0,resource=1.0"
+	OAuth2APIVersion   = "protocol=2.1,resource=1.0"
 	tokenTTLSkew       = 60 * time.Second
 	assertionTTL       = 180 * time.Second
 	defaultHTTPTimeout = 60 * time.Second
@@ -170,6 +171,13 @@ func (c *Client) signAssertion() (string, error) {
 }
 
 func (c *Client) NewRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
+	return c.NewRequestVersion(ctx, method, path, AMAPIVersion, body)
+}
+
+// NewRequestVersion is NewRequest with an explicit Accept-API-Version.
+// OAuth2 clients and the OIDC provider service require protocol=2.1
+// (see docs/api/02-headers-and-versioning.md).
+func (c *Client) NewRequestVersion(ctx context.Context, method, path, version string, body any) (*http.Request, error) {
 	var rdr io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -188,7 +196,7 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body any) 
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-API-Version", AMAPIVersion)
+	req.Header.Set("Accept-API-Version", version)
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

@@ -44,9 +44,9 @@ func (p *aicProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 		MarkdownDescription: "Manage PingOne Advanced Identity Cloud (AIC) tenant configuration. " +
 			"Resources are **typed** — we do not accept raw JSON blobs. An AIC upgrade that adds or " +
 			"renames a field is a provider bug until someone teaches the catalog about it.\n\n" +
-			"`resource_prefix` is prepended to every name we create (scripts, journeys, inner-tree " +
-			"references) so terraform-managed copies cannot collide with the originals they were " +
-			"generated from. Default is `Terraform_`. Set to `\"\"` to write names as given.",
+			"`resource_prefix` is prepended to every name we create (scripts, journeys, OAuth2 " +
+			"client ids, inner-tree references) so terraform-managed copies cannot collide with the " +
+			"originals they were generated from. Default is `Terraform_`. Set to `\"\"` to write names as given.",
 		Attributes: map[string]schema.Attribute{
 			"tenant_url": schema.StringAttribute{
 				Optional:            true,
@@ -68,7 +68,7 @@ func (p *aicProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 			},
 			"resource_prefix": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Prepended to created script and journey names. Default `Terraform_`. Env: `PINGONEAIC_RESOURCE_PREFIX`. Set to empty to disable.",
+				MarkdownDescription: "Prepended to created script, journey, and OAuth2 client names. Default `Terraform_`. Env: `PINGONEAIC_RESOURCE_PREFIX`. Set to empty to disable.",
 			},
 		},
 	}
@@ -117,6 +117,7 @@ func (p *aicProvider) Resources(_ context.Context) []func() resource.Resource {
 	out := []func() resource.Resource{
 		resources.NewScriptResource,
 		resources.NewJourneyResource,
+		resources.NewOAuth2ClientResource,
 	}
 	for _, spec := range nodetype.All() {
 		s := spec

@@ -1,4 +1,4 @@
-// pingoneaic-tf generate — pull live AIC journeys into reviewable Terraform.
+// pingoneaic-tf generate — pull live AIC journeys and OAuth2 clients into reviewable Terraform.
 //
 // Credentials come from the same env vars as the provider:
 //
@@ -72,5 +72,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, "generate:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("wrote %d journeys, %d scripts, %d nodes → %s\n", res.Journeys, res.Scripts, res.Nodes, *out)
+	fmt.Printf("wrote %d journeys, %d scripts, %d nodes, %d oauth2 clients → %s\n", res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, *out)
 }

@@ -11,9 +11,9 @@ Canonical instructions for all AI agents working in this repo. `CLAUDE.md` and
 
 An **experimental** Terraform provider (terraform-plugin-framework, Go 1.25) for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
-manages AM scripts, authentication journeys, and the journey node types those
-trees use. User-facing overview lives in [README.md](../README.md) — don't
-duplicate it here.
+manages AM scripts, authentication journeys, the journey node types those trees
+use, and OAuth2 clients. User-facing overview lives in [README.md](../README.md)
+— don't duplicate it here.
 
 ## The one rule that shapes everything
 
@@ -31,11 +31,12 @@ unrecognised key.
 | Path                  | What lives there                                                                          |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `main.go`             | provider plugin entrypoint (`registry.terraform.io/agiledigital-labs/pingone-aic`)        |
-| `cmd/generate/`       | `pingoneaic-tf` CLI — pulls live journeys into reviewable HCL                             |
+| `cmd/generate/`       | `pingoneaic-tf` CLI — pulls live journeys and OAuth2 clients into reviewable HCL          |
 | `internal/provider/`  | provider schema, config resolution, resource registration                                 |
-| `internal/resources/` | `script.go`, `journey.go`, `node.go` (one generic resource driven by each catalog `Spec`) |
-| `internal/nodetype/`  | **the catalog** — typed field specs for all 34 node types, plus encode/decode             |
-| `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts                                         |
+| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go` (one generic node resource driven by each catalog `Spec`) |
+| `internal/nodetype/`  | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                |
+| `internal/oauth2client/` | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                             |
+| `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients                                                 |
 | `internal/amjson/`    | coercions for AM's loosely-typed JSON, shared by resources and generate                   |
 | `internal/prefix/`    | `resource_prefix` apply/strip helpers                                                     |
 | `internal/testutil/`  | test-only helpers (fake HTTP transport); imported from `_test.go` only                    |
@@ -136,8 +137,8 @@ names), `-journeys` (comma-separated; default all — errors if a requested name
 is not in the realm).
 
 `-out` is **owned** by the tool: each run deletes the previous run's
-`provider.tf`, `scripts.tf`, `journey_*.tf` and `scripts/*.js` so deleted
-journeys don't linger. It writes a `.pingoneaic-generated` marker to claim the
+`provider.tf`, `scripts.tf`, `oauth2_clients.tf`, `journey_*.tf` and
+`scripts/*.js` so deleted objects don't linger. It writes a `.pingoneaic-generated` marker to claim the
 directory and refuses to delete anything in a directory that lacks the marker
 but holds matching files — that guard is what stops `-out examples` eating
 hand-written config. Progress goes to `Options.Progress` (stderr from the CLI);
@@ -148,16 +149,17 @@ hand-written config. Progress goes to `Options.Progress` (stderr from the CLI);
 **Resource prefix.** Terraform config always uses the _logical_ name (`GetIP`);
 the provider prepends `resource_prefix` (default `Terraform_`) on the wire, so
 applying generated config creates copies rather than clobbering the originals.
-`name` vs `remote_name` on `pingoneaic_script` / `pingoneaic_journey` is exactly
-this split. `internal/prefix` is idempotent — `Apply` won't double-prefix.
+`name` vs `remote_name` on `pingoneaic_script` / `pingoneaic_journey` /
+`pingoneaic_oauth2_client` is exactly this split. `internal/prefix` is
+idempotent — `Apply` won't double-prefix.
 
 **Changing `resource_prefix` does not rename existing resources.** It is
-provider-level config, so it never triggers `RequiresReplace`. AM keys trees by
-name and cannot rename, so a journey stays at the name recorded in state —
-`journeyRemoteName` resolves every CRUD path from the persisted id, and only a
-create falls back to `prefix.Apply`. Recomputing the name on update would PUT a
-second tree and orphan the first. Scripts are keyed by UUID, so for them a
-prefix change is a genuine rename in place.
+provider-level config, so it never triggers `RequiresReplace`. AM keys trees and
+OAuth2 clients by name and cannot rename, so those stay at the name recorded in
+state — `journeyRemoteName` / `oauth2RemoteName` resolve every CRUD path from
+the persisted id, and only a create falls back to `prefix.Apply`. Recomputing
+the name on update would PUT a second object and orphan the first. Scripts are
+keyed by UUID, so for them a prefix change is a genuine rename in place.
 
 **Computed attributes with a `Default` must round-trip.** If AM omits the key,
 the decode path has to produce the same value the schema defaults to, or apply
@@ -236,13 +238,13 @@ Most relevant here:
 | `01-realms-and-paths.md`          | realm path composition                          |
 | `02-headers-and-versioning.md`    | `Accept-API-Version` cheat sheet                |
 | `04-scripts.md`                   | script contexts, base64 body, no `_rev`         |
+| `05-oauth2-oidc.md`               | OAuth2 clients, inherited wrappers, `*-encrypted` strip, protocol=2.1 |
 | `09-journeys.md`                  | auth trees, nodes, custom nodes                 |
 | `13-script-contexts.md`           | authoritative per-context binding metadata      |
 | `99-quirks-and-open-questions.md` | cross-cutting weirdness worth a skim            |
 
-The rest of the set (ESVs, OAuth2/OIDC, SAML, IDM, sync mappings, …) covers
-areas that are [out of scope](#scope) for this provider — useful background, not
-current work.
+The rest of the set (ESVs, SAML, IDM, sync mappings, …) covers areas that are
+[out of scope](#scope) for this provider — useful background, not current work.
 
 [manager]: https://github.com/agiledigital-labs/pingone-aic-manager
 
@@ -294,9 +296,9 @@ shapes from memory.
 
 ## Scope
 
-In scope: scripts, journeys, journey nodes. Explicitly **out** of scope until
-that path is proven: ESVs, OAuth2 clients, managed objects, IDM endpoints,
-secret mappings.
+In scope: scripts, journeys, journey nodes, OAuth2 clients. Explicitly **out**
+of scope until that path is proven: ESVs, SAML, managed objects, IDM endpoints,
+secret mappings, the realm-wide OIDC provider service.
 
 ## Secrets
 
