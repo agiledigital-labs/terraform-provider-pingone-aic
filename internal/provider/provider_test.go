@@ -21,7 +21,7 @@ func TestProviderMetadata(t *testing.T) {
 func TestProviderRegistersEveryCatalogResourceOnce(t *testing.T) {
 	p := New("test")()
 	factories := p.Resources(context.Background())
-	if want := len(nodetype.All()) + 5; len(factories) != want {
+	if want := len(nodetype.All()) + 6; len(factories) != want {
 		t.Fatalf("registered %d resources, want %d", len(factories), want)
 	}
 	seen := map[string]bool{}

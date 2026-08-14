@@ -120,6 +120,7 @@ func (p *aicProvider) Resources(_ context.Context) []func() resource.Resource {
 		resources.NewOAuth2ClientResource,
 		resources.NewESVVariableResource,
 		resources.NewESVSecretResource,
+		resources.NewManagedObjectResource,
 	}
 	for _, spec := range nodetype.All() {
 		s := spec

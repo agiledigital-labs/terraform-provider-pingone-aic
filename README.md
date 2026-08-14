@@ -3,7 +3,8 @@
 An **experimental** Terraform provider for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey nodes those trees
-actually use, OAuth2 clients, and ESVs (variables and secrets).
+actually use, OAuth2 clients, ESVs (variables and secrets), and custom
+managed-object types.
 
 This is not a JSON-passthrough wrapper around the AIC REST API. Every attribute
 is typed against a catalog we verified on a live tenant. When AIC adds, removes,
@@ -42,6 +43,7 @@ not hardcoded UUIDs.
 | `pingoneaic_oauth2_client`          | AM `/realm-config/agents/OAuth2Client/{id}`        |
 | `pingoneaic_esv_variable`           | `/environment/variables/{id}`                      |
 | `pingoneaic_esv_secret`             | `/environment/secrets/{id}`                        |
+| `pingoneaic_managed_object`         | one type in `/openidm/config/managed`              |
 | `pingoneaic_<type>_node`            | every other node type used by the generate catalog |
 
 `success` and `failure` are valid connection targets (AM's built-in static

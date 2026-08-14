@@ -36,6 +36,7 @@ unrecognised key.
 | `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go` (one generic node resource driven by each catalog `Spec`) |
 | `internal/nodetype/`  | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                |
 | `internal/oauth2client/` | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                             |
+| `internal/managedobject/` | typed decode/encode for one custom managed-object type (relationships remapped)                              |
 | `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients, ESVs                                           |
 | `internal/amjson/`    | coercions for AM's loosely-typed JSON, shared by resources and generate                   |
 | `internal/prefix/`    | `resource_prefix` apply/strip helpers                                                     |
@@ -297,8 +298,13 @@ shapes from memory.
 ## Scope
 
 In scope: scripts, journeys, journey nodes, OAuth2 clients, ESVs (variables and
-secrets). Explicitly **out** of scope until that path is proven: SAML, managed
-objects, IDM endpoints, secret mappings, the realm-wide OIDC provider service.
+secrets), custom managed-object types. Explicitly **out** of scope until that
+path is proven: SAML, IDM endpoints, secret mappings, the realm-wide OIDC
+provider service, Ping-shipped managed objects (`alpha_user`, …).
+
+**Managed config writes are not read-your-writes.** `ReplaceManagedConfirmed`
+re-reads until the new type is visible. Never PUT a document that was not
+just read — other types in `objects[]` must be preserved.
 
 **ESV ids cannot take `Terraform_` as a prefix.** AIC requires
 `^esv-[a-z0-9_-]{1,124}$`. `prefix.ApplyESV` lowercases the provider prefix and

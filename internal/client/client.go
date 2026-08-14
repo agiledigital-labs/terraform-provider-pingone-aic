@@ -57,9 +57,10 @@ type Client struct {
 	Prefix      string
 	http        *http.Client
 
-	mu       sync.Mutex
-	token    string
-	tokenExp time.Time
+	mu        sync.Mutex
+	token     string
+	tokenExp  time.Time
+	managedMu sync.Mutex
 }
 
 func New(cfg Config) (*Client, error) {
@@ -197,7 +198,9 @@ func (c *Client) NewRequestVersion(ctx context.Context, method, path, version st
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-API-Version", version)
+	if version != "" {
+		req.Header.Set("Accept-API-Version", version)
+	}
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

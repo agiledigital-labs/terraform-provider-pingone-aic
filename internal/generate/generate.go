@@ -33,13 +33,14 @@ type Options struct {
 }
 
 type Result struct {
-	Journeys      int
-	Scripts       int
-	Nodes         int
-	OAuth2Clients int
-	Variables     int
-	Secrets       int
-	Files         []string
+	Journeys       int
+	Scripts        int
+	Nodes          int
+	OAuth2Clients  int
+	Variables      int
+	Secrets        int
+	ManagedObjects int
+	Files          []string
 }
 
 func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
@@ -105,13 +106,18 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	if err := g.ingestESVs(ctx); err != nil {
 		return nil, err
 	}
+	progressf(opt, "Reading managed object types")
+	if err := g.ingestManaged(ctx); err != nil {
+		return nil, err
+	}
 
 	res := &Result{
 		Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes),
 		OAuth2Clients: len(g.oauth2), Variables: len(g.variables), Secrets: len(g.secrets),
+		ManagedObjects: len(g.managed),
 	}
-	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), %d oauth2 client(s), %d variable(s), %d secret(s) to %s",
-		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, opt.OutDir)
+	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), %d oauth2 client(s), %d variable(s), %d secret(s), %d managed object(s) to %s",
+		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, res.ManagedObjects, opt.OutDir)
 	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
 		return nil, err
 	}
@@ -132,6 +138,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		return nil, err
 	}
 	if err := g.writeESVs(); err != nil {
+		return nil, err
+	}
+	if err := g.writeManaged(); err != nil {
 		return nil, err
 	}
 	res.Files = g.files
@@ -186,6 +195,7 @@ func generatedPaths(outDir string) ([]string, error) {
 		filepath.Join(outDir, "oauth2_clients.tf"),
 		filepath.Join(outDir, "esv_variables.tf"),
 		filepath.Join(outDir, "esv_secrets.tf"),
+		filepath.Join(outDir, "managed_objects.tf"),
 	}
 	for _, pattern := range []string{
 		filepath.Join(outDir, "journey_*.tf"),
@@ -269,6 +279,7 @@ type gen struct {
 	oauth2       []emittedOAuth2Client
 	variables    []emittedVariable
 	secrets      []emittedSecret
+	managed      []emittedManaged
 }
 
 type emittedNode struct {

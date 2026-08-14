@@ -37,6 +37,11 @@ findings). Each should name the guard that will eventually retire it.
   bodies through the validator; a shape you did not think of is exactly what the
   allowlist will reject in production. _Guard: none automated — the sweep is
   manual. A `-tags live` test reading a fixture directory would retire it._
+  Managed custom types: `TestDecodeAllCustomObjectsFromTenantSweep`.
+- **Whole-document RMW must serialise in-process.** Two Terraform resources
+  mutating `/openidm/config/managed` in parallel each confirmed their own
+  insert, then the second PUT dropped the first. _Guard: `Client.MutateManaged`
+  holds `managedMu` around GET+mutate+PUT+confirm._
 
 - **Error identity must survive wrapping.** A helper that classifies an error
   (`IsNotFound` and friends) must use `errors.As`/`errors.Is`, never a bare

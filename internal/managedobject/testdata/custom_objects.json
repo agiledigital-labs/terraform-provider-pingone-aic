@@ -1,0 +1,1448 @@
+{
+  "objects": [
+    {
+      "iconClass": "fa fa-lock",
+      "name": "alpha_lock",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Advisory lock objects for serialising operations (e.g. reconById). _id is the lock key.",
+        "icon": "fa-lock",
+        "order": [
+          "lockKey",
+          "owner",
+          "acquiredAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "acquiredAt": {
+            "searchable": false,
+            "title": "Acquired at (epoch ms)",
+            "type": "number",
+            "userEditable": false,
+            "viewable": true
+          },
+          "expiresAt": {
+            "searchable": false,
+            "title": "Expires at (epoch ms)",
+            "type": "number",
+            "userEditable": false,
+            "viewable": true
+          },
+          "lockKey": {
+            "searchable": false,
+            "title": "Lock key",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "owner": {
+            "searchable": false,
+            "title": "Owner token",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          }
+        },
+        "required": [
+          "lockKey"
+        ],
+        "title": "Lock"
+      }
+    },
+    {
+      "name": "mock_sms",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "SMS captured by endpoint/mock-c1 (sandbox journey tests)",
+        "icon": "fa-flask",
+        "order": [
+          "receivedAt",
+          "correlationId",
+          "transactionId",
+          "payload",
+          "destination",
+          "message",
+          "origin"
+        ],
+        "properties": {
+          "correlationId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-correlationId header",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "destination": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Destination phone number",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "message": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Message text",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "origin": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Sender id",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "payload": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Raw request payload (JSON)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "receivedAt": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Received at (ISO timestamp)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "transactionId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-forgerock-transactionid header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [],
+        "title": "Mock SMS",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mock_email",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Email captured by endpoint/mock-c1 (sandbox journey tests)",
+        "icon": "fa-flask",
+        "order": [
+          "receivedAt",
+          "correlationId",
+          "transactionId",
+          "payload",
+          "recipient"
+        ],
+        "properties": {
+          "correlationId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-correlationId header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "payload": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Raw request payload (JSON)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "receivedAt": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Received at (ISO timestamp)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "recipient": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Recipient email",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "transactionId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-forgerock-transactionid header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [],
+        "title": "Mock Email",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mock_event",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Quest event captured by endpoint/mock-c1 (sandbox journey tests)",
+        "icon": "fa-flask",
+        "order": [
+          "receivedAt",
+          "correlationId",
+          "transactionId",
+          "payload",
+          "eventLabel",
+          "genericId"
+        ],
+        "properties": {
+          "correlationId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-correlationId header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "eventLabel": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Event label (LOGIN, REGISTRATION, ...)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "genericId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Customer generic id",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "payload": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Raw request payload (JSON)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "receivedAt": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Received at (ISO timestamp)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "transactionId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-forgerock-transactionid header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [],
+        "title": "Mock Quest Event",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mock_registration",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Registration eligibility request captured by endpoint/mock-c1",
+        "icon": "fa-flask",
+        "order": [
+          "receivedAt",
+          "correlationId",
+          "transactionId",
+          "payload",
+          "email",
+          "application"
+        ],
+        "properties": {
+          "application": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Customer portal (SSCP/VFM)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "correlationId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-correlationId header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "email": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Customer portal login email",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "payload": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Raw request payload (JSON)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "receivedAt": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Received at (ISO timestamp)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "transactionId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-forgerock-transactionid header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [],
+        "title": "Mock Registration Lookup",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mock_failure",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Sticky failure-injection rule for endpoint/mock-c1: requests on  whose key field contains  fail with / until expiresAt",
+        "icon": "fa-flask",
+        "order": [
+          "receivedAt",
+          "correlationId",
+          "transactionId",
+          "payload",
+          "route",
+          "key",
+          "status",
+          "body",
+          "expiresAt"
+        ],
+        "properties": {
+          "body": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Error body message",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "correlationId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-correlationId header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "expiresAt": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Expiry (ISO timestamp)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "key": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Substring matched against destination/recipient/email",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "payload": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Raw request payload (JSON)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "receivedAt": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Received at (ISO timestamp)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "route": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Route (e.g. v1/sms/send)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "status": {
+            "nullable": true,
+            "searchable": true,
+            "title": "HTTP status to return",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "transactionId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-forgerock-transactionid header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [],
+        "title": "Mock Failure Rule",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mock_quantum",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Quantum customer-contact update captured by endpoint/mock-c1 (sandbox journey tests)",
+        "icon": "fa-flask",
+        "order": [
+          "receivedAt",
+          "correlationId",
+          "transactionId",
+          "payload",
+          "omniGuid",
+          "telephoneNumber"
+        ],
+        "properties": {
+          "correlationId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-correlationId header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "omniGuid": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Omni quote guid",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "payload": {
+            "nullable": true,
+            "searchable": false,
+            "title": "Raw request payload (JSON)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "receivedAt": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Received at (ISO timestamp)",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "telephoneNumber": {
+            "nullable": true,
+            "searchable": true,
+            "title": "Phone number",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "transactionId": {
+            "nullable": true,
+            "searchable": true,
+            "title": "x-forgerock-transactionid header",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [],
+        "title": "Mock Quantum Contact",
+        "type": "object"
+      }
+    },
+    {
+      "name": "test_from",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": null,
+        "icon": "fa-database",
+        "order": [
+          "firstName",
+          "lastName",
+          "age",
+          "hasManyHasMany",
+          "hasManyHasOne",
+          "hasManyHasNone",
+          "hasOneHasMany",
+          "hasOnehOne",
+          "hasOneHasNone",
+          "aicRel"
+        ],
+        "properties": {
+          "age": {
+            "searchable": false,
+            "title": "Age",
+            "type": "number",
+            "userEditable": true,
+            "viewable": true
+          },
+          "aicRel": {
+            "description": "My Rel",
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "test_to",
+                "path": "managed/test_to",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": "revAicRel",
+            "reverseRelationship": true,
+            "searchable": true,
+            "title": "AIC Rel",
+            "type": "relationship",
+            "userEditable": true,
+            "validate": true,
+            "viewable": true
+          },
+          "firstName": {
+            "searchable": false,
+            "title": "First Name",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "hasManyHasMany": {
+            "description": null,
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_from:hasManyHasMany",
+            "items": {
+              "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_from:hasManyHasMany:items",
+              "notifySelf": false,
+              "properties": {
+                "_ref": {
+                  "type": "string"
+                },
+                "_refProperties": {
+                  "properties": {
+                    "_id": {
+                      "propName": "_id",
+                      "required": false,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "resourceCollection": [
+                {
+                  "label": "Test_to",
+                  "notify": false,
+                  "path": "managed/test_to",
+                  "query": {
+                    "fields": [],
+                    "queryFilter": "true",
+                    "sortKeys": []
+                  }
+                }
+              ],
+              "reversePropertyName": "hasManyhasMany",
+              "reverseRelationship": true,
+              "type": "relationship",
+              "validate": true
+            },
+            "returnByDefault": false,
+            "searchable": false,
+            "title": "Hasmanyhasmany",
+            "type": "array",
+            "userEditable": false,
+            "viewable": true
+          },
+          "hasManyHasNone": {
+            "description": null,
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_from:hasManyHasNone",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "propName": "_id",
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "Test_to",
+                "notify": false,
+                "path": "managed/test_to",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": null,
+            "reverseRelationship": false,
+            "searchable": false,
+            "title": "Hasmanyhasnone",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": true,
+            "viewable": true
+          },
+          "hasManyHasOne": {
+            "description": null,
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_from:hasManyHasOne",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "propName": "_id",
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "Test_to",
+                "notify": false,
+                "path": "managed/test_to",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": "hasOneHasMany",
+            "reverseRelationship": true,
+            "searchable": false,
+            "title": "Hasmanyhasone",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": true,
+            "viewable": true
+          },
+          "hasOneHasMany": {
+            "description": null,
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_from:hasOneHasMany",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "propName": "_id",
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "Test_to",
+                "notify": false,
+                "path": "managed/test_to",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": "hasManyHasOne",
+            "reverseRelationship": true,
+            "searchable": false,
+            "title": "Hasonehasmany",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": true,
+            "viewable": true
+          },
+          "hasOneHasNone": {
+            "description": null,
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_from:hasOneHasNone",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "propName": "_id",
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "Test_to",
+                "notify": false,
+                "path": "managed/test_to",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": null,
+            "reverseRelationship": false,
+            "searchable": false,
+            "title": "Hasonehasnone",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": true,
+            "viewable": true
+          },
+          "hasOnehOne": {
+            "description": null,
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_from:hasOnehOne",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "propName": "_id",
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "Test_to",
+                "notify": false,
+                "path": "managed/test_to",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": "hasOneHasOne",
+            "reverseRelationship": true,
+            "searchable": false,
+            "title": "Hasonehone",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": true,
+            "viewable": true
+          },
+          "lastName": {
+            "searchable": false,
+            "title": "Last Name",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [
+          "firstName",
+          "aicRel"
+        ],
+        "title": "Test From",
+        "type": "object"
+      }
+    },
+    {
+      "name": "test_to",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": null,
+        "icon": "fa-database",
+        "order": [
+          "name",
+          "age",
+          "hasManyhasMany",
+          "hasOneHasMany",
+          "hasManyHasOne",
+          "hasOneHasOne",
+          "revAicRel"
+        ],
+        "properties": {
+          "age": {
+            "searchable": false,
+            "title": "Age",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "hasManyHasOne": {
+            "description": "hasManyHasOne",
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_to:hasManyHasOne",
+            "items": {
+              "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_to:hasManyHasOne:items",
+              "properties": {
+                "_ref": {
+                  "type": "string"
+                },
+                "_refProperties": {
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "resourceCollection": [
+                {
+                  "label": "test_from",
+                  "notify": false,
+                  "path": "managed/test_from",
+                  "query": {
+                    "fields": [],
+                    "queryFilter": "true",
+                    "sortKeys": []
+                  }
+                }
+              ],
+              "reversePropertyName": "hasOneHasMany",
+              "reverseRelationship": true,
+              "type": "relationship",
+              "validate": false
+            },
+            "notifySelf": false,
+            "returnByDefault": false,
+            "searchable": false,
+            "title": "hasManyHasOne",
+            "type": "array",
+            "userEditable": false,
+            "viewable": true
+          },
+          "hasManyhasMany": {
+            "description": "hasManyhasMany",
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_to:hasManyhasMany",
+            "items": {
+              "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_to:hasManyhasMany:items",
+              "properties": {
+                "_ref": {
+                  "type": "string"
+                },
+                "_refProperties": {
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "resourceCollection": [
+                {
+                  "label": "test_from",
+                  "notify": false,
+                  "path": "managed/test_from",
+                  "query": {
+                    "fields": [],
+                    "queryFilter": "true",
+                    "sortKeys": []
+                  }
+                }
+              ],
+              "reversePropertyName": "hasManyHasMany",
+              "reverseRelationship": true,
+              "type": "relationship",
+              "validate": false
+            },
+            "notifySelf": false,
+            "returnByDefault": false,
+            "searchable": false,
+            "title": "hasManyhasMany",
+            "type": "array",
+            "userEditable": false,
+            "viewable": true
+          },
+          "hasOneHasMany": {
+            "description": "hasOneHasMany",
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_to:hasOneHasMany",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "test_from",
+                "notify": false,
+                "path": "managed/test_from",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": "hasManyHasOne",
+            "reverseRelationship": true,
+            "searchable": false,
+            "title": "hasOneHasMany",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": false,
+            "viewable": true
+          },
+          "hasOneHasOne": {
+            "description": "hasOneHasOne",
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_to:hasOneHasOne",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "test_from",
+                "notify": false,
+                "path": "managed/test_from",
+                "query": {
+                  "fields": [],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": "hasOnehOne",
+            "reverseRelationship": true,
+            "searchable": false,
+            "title": "hasOneHasOne",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": false,
+            "viewable": true
+          },
+          "name": {
+            "searchable": false,
+            "title": "Full Name",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "revAicRel": {
+            "items": {
+              "properties": {
+                "_ref": {
+                  "type": "string"
+                },
+                "_refProperties": {
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "resourceCollection": [
+                {
+                  "label": "test_from",
+                  "path": "managed/test_from",
+                  "query": {
+                    "fields": [],
+                    "queryFilter": "true",
+                    "sortKeys": []
+                  }
+                }
+              ],
+              "reversePropertyName": "aicRel",
+              "reverseRelationship": true,
+              "type": "relationship",
+              "validate": false
+            },
+            "returnByDefault": false,
+            "searchable": false,
+            "title": "revAicRel",
+            "type": "array",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [
+          "name",
+          "age"
+        ],
+        "title": "Test To",
+        "type": "object"
+      }
+    },
+    {
+      "name": "Test_Object",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": null,
+        "icon": "fa-database",
+        "order": [
+          "firstName",
+          "surname",
+          "objects"
+        ],
+        "properties": {
+          "firstName": {
+            "searchable": false,
+            "title": "First Name",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "objects": {
+            "description": "objects",
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_Object:objects",
+            "items": {
+              "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_Object:objects:items",
+              "properties": {
+                "_ref": {
+                  "type": "string"
+                },
+                "_refProperties": {
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "resourceCollection": [
+                {
+                  "label": "test_obj2",
+                  "notify": false,
+                  "path": "managed/test_obj2",
+                  "query": {
+                    "fields": [
+                      "surName"
+                    ],
+                    "queryFilter": "true",
+                    "sortKeys": []
+                  }
+                }
+              ],
+              "reversePropertyName": "other",
+              "reverseRelationship": true,
+              "type": "relationship",
+              "validate": false
+            },
+            "notifySelf": false,
+            "returnByDefault": false,
+            "searchable": false,
+            "title": "objects",
+            "type": "array",
+            "userEditable": false,
+            "viewable": true
+          },
+          "surname": {
+            "searchable": false,
+            "title": "Surname",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [
+          "firstName",
+          "surname"
+        ],
+        "title": "Test Object",
+        "type": "object"
+      }
+    },
+    {
+      "iconClass": "fa fa-exchange",
+      "name": "idr_name_variants",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Normalised given-name and surname variant pairs used by the IDR scorer. The record _id is role__ plus the lexically sorted normalised nameA_nameB key.",
+        "order": [
+          "nameA",
+          "nameB",
+          "role",
+          "score",
+          "imputed"
+        ],
+        "properties": {
+          "imputed": {
+            "description": null,
+            "isVirtual": false,
+            "searchable": true,
+            "title": "Score was imputed",
+            "type": "boolean",
+            "userEditable": false,
+            "viewable": true
+          },
+          "nameA": {
+            "description": null,
+            "format": null,
+            "isVirtual": false,
+            "searchable": true,
+            "title": "First normalised name",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "nameB": {
+            "description": null,
+            "format": null,
+            "isVirtual": false,
+            "searchable": true,
+            "title": "Second normalised name",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "role": {
+            "description": null,
+            "enum": [
+              "given",
+              "surname"
+            ],
+            "format": null,
+            "isVirtual": false,
+            "searchable": true,
+            "title": "Name role",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "score": {
+            "description": null,
+            "isVirtual": false,
+            "maximum": 100,
+            "minimum": 0,
+            "searchable": true,
+            "title": "IDR name score",
+            "type": "number",
+            "userEditable": false,
+            "viewable": true
+          }
+        },
+        "required": [
+          "nameA",
+          "nameB",
+          "role",
+          "score",
+          "imputed"
+        ],
+        "title": "Name Variant",
+        "type": "object"
+      }
+    },
+    {
+      "iconClass": "fa fa-flag",
+      "name": "idr_name_variant_discrepancies",
+      "schema": {
+        "$schema": "http://forgerock.org/json-schema#",
+        "description": "Single-token name pairs harvested when the parallel-run reference disagrees with our scorer on Person_Name and the two full names differ in exactly one same-role token. The record _id is role__ plus the lexically ordered TEXT-normalised nameA_nameB pair (distinct raw spellings stay distinct rows); variantKey is the idr_name_variants _id the pair collapses to, so promotion is a copy. PRIVACY: this table must never carry user linkage \u2014 no user id, tracking id, dob, email, or phone fields may be added.",
+        "order": [
+          "nameA",
+          "nameB",
+          "role",
+          "variantKey",
+          "variantScore",
+          "ourNameScore",
+          "refNameScore",
+          "count",
+          "firstSeen",
+          "lastSeen",
+          "status"
+        ],
+        "properties": {
+          "count": {
+            "minimum": 1,
+            "searchable": false,
+            "title": "Sighting count",
+            "type": "number",
+            "userEditable": false,
+            "viewable": true
+          },
+          "firstSeen": {
+            "searchable": false,
+            "title": "First sighting (ISO-8601)",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "lastSeen": {
+            "searchable": false,
+            "title": "Last sighting (ISO-8601)",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "nameA": {
+            "searchable": false,
+            "title": "First differing name token",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "nameB": {
+            "searchable": false,
+            "title": "Second differing name token",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "ourNameScore": {
+            "maximum": 100,
+            "minimum": 0,
+            "searchable": false,
+            "title": "Our name score at last sighting",
+            "type": "number",
+            "userEditable": false,
+            "viewable": true
+          },
+          "refNameScore": {
+            "maximum": 100,
+            "minimum": 0,
+            "searchable": false,
+            "title": "Reference name score at last sighting",
+            "type": "number",
+            "userEditable": false,
+            "viewable": true
+          },
+          "role": {
+            "enum": [
+              "given",
+              "surname"
+            ],
+            "searchable": false,
+            "title": "Name role",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "status": {
+            "enum": [
+              "new",
+              "scored",
+              "promoted",
+              "rejected"
+            ],
+            "searchable": false,
+            "title": "Review status",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "variantKey": {
+            "searchable": false,
+            "title": "idr_name_variants _id this pair collapses to",
+            "type": "string",
+            "userEditable": false,
+            "viewable": true
+          },
+          "variantScore": {
+            "maximum": 100,
+            "minimum": 0,
+            "searchable": false,
+            "title": "Existing idr_name_variants score at last sighting (absent = missing pair)",
+            "type": "number",
+            "userEditable": false,
+            "viewable": true
+          }
+        },
+        "required": [
+          "nameA",
+          "nameB",
+          "role",
+          "variantKey",
+          "ourNameScore",
+          "refNameScore",
+          "count",
+          "firstSeen",
+          "lastSeen",
+          "status"
+        ],
+        "title": "IDR Name Variant Discrepancy",
+        "type": "object"
+      }
+    },
+    {
+      "name": "test_obj2",
+      "schema": {
+        "description": "My Test Object",
+        "order": [
+          "givenName",
+          "surName",
+          "other"
+        ],
+        "properties": {
+          "givenName": {
+            "description": "Given Name value",
+            "searchable": true,
+            "title": "Given Name",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          },
+          "other": {
+            "description": null,
+            "id": "urn:jsonschema:org:forgerock:openidm:managed:api:Test_obj2:other",
+            "notifySelf": false,
+            "properties": {
+              "_ref": {
+                "type": "string"
+              },
+              "_refProperties": {
+                "properties": {
+                  "_id": {
+                    "propName": "_id",
+                    "required": false,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "resourceCollection": [
+              {
+                "label": "Test_object",
+                "notify": false,
+                "path": "managed/Test_Object",
+                "query": {
+                  "fields": [
+                    "firstName",
+                    "surname"
+                  ],
+                  "queryFilter": "true",
+                  "sortKeys": []
+                }
+              }
+            ],
+            "returnByDefault": false,
+            "reversePropertyName": "objects",
+            "reverseRelationship": true,
+            "searchable": false,
+            "title": "Other",
+            "type": "relationship",
+            "userEditable": false,
+            "validate": true,
+            "viewable": true
+          },
+          "surName": {
+            "description": "Surname that we're testing",
+            "searchable": false,
+            "title": "Surname",
+            "type": "string",
+            "userEditable": true,
+            "viewable": true
+          }
+        },
+        "required": [
+          "givenName"
+        ],
+        "title": "Test Object",
+        "type": "object"
+      }
+    },
+    {
+      "name": "test_relationship",
+      "schema": {
+        "description": null,
+        "icon": "fa-database",
+        "mat-icon": null,
+        "title": "Test Relationship"
+      }
+    }
+  ]
+}
