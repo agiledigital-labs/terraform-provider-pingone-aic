@@ -148,7 +148,11 @@ func TreeWriteBody(raw map[string]any) (map[string]any, error) {
 }
 
 var (
-	treeUIAttrs     = map[string]struct{}{"categories": {}}
+	// annotations is the journey editor's canvas layout (a JSON string of
+	// {"forNodes":…,"structural":…}). It is pure UI chrome we neither model nor
+	// emit, but it must be accepted: 6 of 35 trees on the sandbox carry it, and
+	// rejecting it broke generate and Read for every one of them.
+	treeUIAttrs     = map[string]struct{}{"annotations": {}, "categories": {}}
 	treeNodeAttrs   = map[string]struct{}{"connections": {}, "displayName": {}, "nodeType": {}, "version": {}, "x": {}, "y": {}}
 	staticNodeAttrs = map[string]struct{}{"x": {}, "y": {}}
 )

@@ -23,6 +23,32 @@ func TestValidateTreeInternalsAcceptsKnownShape(t *testing.T) {
 	}
 }
 
+// Shapes taken from a live tenant (2026-08-14, alpha realm, 35 trees). Rejecting
+// any of these breaks generate and Read for a real journey, so they are
+// regression cases rather than hypotheticals.
+func TestValidateTreeInternalsAcceptsLiveShapes(t *testing.T) {
+	tests := map[string]func(map[string]any){
+		// 6 of 35 trees carry the editor's canvas layout alongside categories.
+		"uiConfig.annotations": func(tree map[string]any) {
+			tree["uiConfig"] = map[string]any{
+				"categories":  "[]",
+				"annotations": `{"forNodes":{},"structural":[]}`,
+			}
+		},
+		// 3 of 35 trees have no staticNodes key at all.
+		"staticNodes absent": func(tree map[string]any) { delete(tree, "staticNodes") },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			tree := validTreeInternals()
+			mutate(tree)
+			if err := validateTreeInternals(tree); err != nil {
+				t.Fatalf("rejected a shape AM really returns: %v", err)
+			}
+		})
+	}
+}
+
 // The nested check is only reachable through TreeWriteBody, so callers cannot
 // half-enforce the fail-closed contract by forgetting a second call.
 func TestTreeWriteBodyRejectsNestedUnknownFields(t *testing.T) {
