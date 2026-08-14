@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -37,6 +38,14 @@ type managedObjectModel struct {
 	Icon        types.String           `tfsdk:"icon"`
 	IconClass   types.String           `tfsdk:"icon_class"`
 	Properties  []managedPropertyModel `tfsdk:"property"`
+	Hooks       []managedHookModel     `tfsdk:"hook"`
+}
+
+type managedHookModel struct {
+	Event  types.String `tfsdk:"event"`
+	Type   types.String `tfsdk:"type"`
+	Source types.String `tfsdk:"source"`
+	File   types.String `tfsdk:"file"`
 }
 
 type managedPropertyModel struct {
@@ -96,7 +105,8 @@ func (r *managedObjectResource) Schema(_ context.Context, _ resource.SchemaReque
 			"Writes are read-modify-write of the whole document and are re-read until the change is visible — " +
 			"a 200 on PUT is not enough (Q14). Other types in the tenant are left untouched. " +
 			"`name` is the logical type name; `resource_prefix` is prepended on the wire, and `managed/` " +
-			"relationship paths are prefixed the same way.",
+			"relationship paths are prefixed the same way. Lifecycle hooks are `hook` blocks on this " +
+			"type — applying a copy never writes hooks onto Ping-shipped objects such as `alpha_user`.",
 		Attributes: map[string]schema.Attribute{
 			"id":          schema.StringAttribute{Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"name":        schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
@@ -109,6 +119,17 @@ func (r *managedObjectResource) Schema(_ context.Context, _ resource.SchemaReque
 		Blocks: map[string]schema.Block{
 			"property": schema.ListNestedBlock{
 				NestedObject: schema.NestedBlockObject{Attributes: propAttrs},
+			},
+			"hook": schema.SetNestedBlock{
+				MarkdownDescription: "A lifecycle script (`onCreate`, `onUpdate`, `onDelete`, `postCreate`, `postUpdate`, `postDelete`, or any other javascript source/file sibling of `schema`). Inline `source` is plaintext; `file` is a product path the config API cannot read. Order is not significant.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"event":  schema.StringAttribute{Required: true, MarkdownDescription: "Top-level hook key, e.g. `onCreate`."},
+						"type":   schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("text/javascript")},
+						"source": schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext JavaScript body."},
+						"file":   schema.StringAttribute{Optional: true, MarkdownDescription: "Server-side file path for stock Ping hooks."},
+					},
+				},
 			},
 		},
 	}
@@ -303,6 +324,15 @@ func modelToManaged(plan managedObjectModel) managedobject.Object {
 		}
 		props = append(props, prop)
 	}
+	hooks := make([]managedobject.Hook, 0, len(plan.Hooks))
+	for _, h := range plan.Hooks {
+		hooks = append(hooks, managedobject.Hook{
+			Event:  h.Event.ValueString(),
+			Type:   h.Type.ValueString(),
+			Source: h.Source.ValueString(),
+			File:   h.File.ValueString(),
+		})
+	}
 	return managedobject.Object{
 		Name:        plan.Name.ValueString(),
 		Title:       plan.Title.ValueString(),
@@ -311,6 +341,7 @@ func modelToManaged(plan managedObjectModel) managedobject.Object {
 		IconClass:   plan.IconClass.ValueString(),
 		Required:    required,
 		Properties:  props,
+		Hooks:       hooks,
 	}
 }
 
@@ -352,6 +383,15 @@ func managedToModel(o *managedobject.Object, logical, remote string) managedObje
 		}
 		props = append(props, pm)
 	}
+	hooks := make([]managedHookModel, 0, len(o.Hooks))
+	for _, h := range o.Hooks {
+		hooks = append(hooks, managedHookModel{
+			Event:  types.StringValue(h.Event),
+			Type:   types.StringValue(firstNonEmpty(h.Type, "text/javascript")),
+			Source: stringOrNull(h.Source),
+			File:   stringOrNull(h.File),
+		})
+	}
 	return managedObjectModel{
 		ID:          types.StringValue(remote),
 		Name:        types.StringValue(name),
@@ -361,6 +401,7 @@ func managedToModel(o *managedobject.Object, logical, remote string) managedObje
 		Icon:        stringOrNull(o.Icon),
 		IconClass:   stringOrNull(o.IconClass),
 		Properties:  props,
+		Hooks:       hooks,
 	}
 }
 

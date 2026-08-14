@@ -31,6 +31,10 @@ var collectionKeys = map[string]struct{}{
 	"path": {}, "label": {}, "notify": {}, "query": {},
 }
 
+var hookKeys = map[string]struct{}{
+	"type": {}, "source": {}, "file": {}, "globals": {},
+}
+
 // Object is the Terraform-facing view of one managed type.
 type Object struct {
 	Name        string
@@ -43,6 +47,18 @@ type Object struct {
 	JSONSchema  string
 	Required    []string
 	Properties  []Property
+	Hooks       []Hook
+}
+
+// Hook is one lifecycle script on a managed type (onCreate, onUpdate, …).
+// Detected by value shape, not a hardcoded event list: an object whose type
+// mentions javascript and that carries source or file. File-backed hooks are
+// markers only — the config API cannot read the referenced file.
+type Hook struct {
+	Event  string
+	Type   string
+	Source string
+	File   string
 }
 
 type Property struct {
@@ -71,11 +87,20 @@ type Property struct {
 
 func DecodeAPI(raw map[string]any, resourcePrefix string) (*Object, error) {
 	var unknown []string
-	for k := range raw {
+	var hooks []Hook
+	for k, v := range raw {
 		if k == "name" || k == "schema" || k == "iconClass" {
 			continue
 		}
 		if _, chrome := objectChrome[k]; chrome {
+			continue
+		}
+		if m, ok := v.(map[string]any); ok && isHook(m) {
+			h, err := decodeHook(k, m)
+			if err != nil {
+				return nil, err
+			}
+			hooks = append(hooks, h)
 			continue
 		}
 		unknown = append(unknown, k)
@@ -84,10 +109,12 @@ func DecodeAPI(raw map[string]any, resourcePrefix string) (*Object, error) {
 		sort.Strings(unknown)
 		return nil, fmt.Errorf("managed object has unmodelled fields %v — add them to internal/managedobject", unknown)
 	}
+	sort.Slice(hooks, func(i, j int) bool { return hooks[i].Event < hooks[j].Event })
 	name, _ := raw["name"].(string)
 	out := &Object{
 		Name:      prefix.Strip(resourcePrefix, name),
 		IconClass: stringOrEmpty(raw["iconClass"]),
+		Hooks:     hooks,
 	}
 	schema, _ := raw["schema"].(map[string]any)
 	if schema != nil {
@@ -96,6 +123,65 @@ func DecodeAPI(raw map[string]any, resourcePrefix string) (*Object, error) {
 		}
 	}
 	return out, nil
+}
+
+func isHook(m map[string]any) bool {
+	t, _ := m["type"].(string)
+	if !strings.Contains(t, "javascript") {
+		return false
+	}
+	if _, ok := m["source"].(string); ok {
+		return true
+	}
+	if file, ok := m["file"].(string); ok && file != "" {
+		return true
+	}
+	return false
+}
+
+func decodeHook(event string, raw map[string]any) (Hook, error) {
+	var unknown []string
+	for k := range raw {
+		if _, ok := hookKeys[k]; !ok {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return Hook{}, fmt.Errorf("hook %s has unmodelled fields %v — add them to internal/managedobject", event, unknown)
+	}
+	if g, ok := raw["globals"]; ok && g != nil {
+		obj, isObj := g.(map[string]any)
+		if !isObj {
+			return Hook{}, fmt.Errorf("hook %s globals: unexpected %T", event, g)
+		}
+		if len(obj) > 0 {
+			keys := make([]string, 0, len(obj))
+			for k := range obj {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			return Hook{}, fmt.Errorf("hook %s has non-empty globals %v — add them to internal/managedobject", event, keys)
+		}
+	}
+	src := stringOrEmpty(raw["source"])
+	file := stringOrEmpty(raw["file"])
+	if src != "" && file != "" {
+		return Hook{}, fmt.Errorf("hook %s has both source and file", event)
+	}
+	if src == "" && file == "" {
+		return Hook{}, fmt.Errorf("hook %s has neither source nor file", event)
+	}
+	h := Hook{
+		Event:  event,
+		Type:   stringOrEmpty(raw["type"]),
+		Source: src,
+		File:   file,
+	}
+	if h.Type == "" {
+		h.Type = "text/javascript"
+	}
+	return h, nil
 }
 
 func decodeSchema(schema map[string]any, out *Object, resourcePrefix string) error {
@@ -265,7 +351,23 @@ func EncodeAPI(o Object, resourcePrefix string) map[string]any {
 	if o.IconClass != "" {
 		out["iconClass"] = o.IconClass
 	}
+	for _, h := range o.Hooks {
+		out[h.Event] = encodeHook(h)
+	}
 	return out
+}
+
+func encodeHook(h Hook) map[string]any {
+	body := map[string]any{
+		"type": first(h.Type, "text/javascript"),
+	}
+	if h.Source != "" {
+		body["source"] = h.Source
+	}
+	if h.File != "" {
+		body["file"] = h.File
+	}
+	return body
 }
 
 func encodeProperty(p Property, resourcePrefix string) map[string]any {

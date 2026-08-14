@@ -72,6 +72,85 @@ func TestRelationshipPathPrefixRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDecodeHooksInlineFileAndEmptyGlobals(t *testing.T) {
+	decoded, err := DecodeAPI(map[string]any{
+		"name": "probe",
+		"schema": map[string]any{
+			"type":       "object",
+			"title":      "Probe",
+			"order":      []any{"note"},
+			"properties": map[string]any{"note": map[string]any{"type": "string"}},
+		},
+		"onCreate": map[string]any{
+			"type":   "text/javascript",
+			"source": "require('onCreateUser').setDefaultFields(object);",
+		},
+		"onUpdate": map[string]any{
+			"type":    "text/javascript",
+			"source":  "require('onUpdateUser').preserveLastSync(object, oldObject, request);",
+			"globals": map[string]any{},
+		},
+		"onDelete": map[string]any{
+			"type": "text/javascript",
+			"file": "roles/onDelete-roles.js",
+		},
+		"postCreate": map[string]any{
+			"type":   "text/javascript",
+			"source": "require('roles/postOperation-roles').manageTemporalConstraints(resourceName);",
+		},
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Hooks) != 4 {
+		t.Fatalf("hooks = %#v", decoded.Hooks)
+	}
+	byEvent := map[string]Hook{}
+	for _, h := range decoded.Hooks {
+		byEvent[h.Event] = h
+	}
+	if byEvent["onCreate"].Source == "" || byEvent["onDelete"].File != "roles/onDelete-roles.js" {
+		t.Fatalf("%#v", byEvent)
+	}
+	body := EncodeAPI(*decoded, "")
+	onCreate := body["onCreate"].(map[string]any)
+	if onCreate["source"] != "require('onCreateUser').setDefaultFields(object);" {
+		t.Fatalf("encode onCreate = %#v", onCreate)
+	}
+	if _, ok := body["onUpdate"].(map[string]any)["globals"]; ok {
+		t.Fatal("empty globals should be omitted")
+	}
+	if body["onDelete"].(map[string]any)["file"] != "roles/onDelete-roles.js" {
+		t.Fatalf("encode onDelete = %#v", body["onDelete"])
+	}
+}
+
+func TestDecodeRejectsUnknownHookField(t *testing.T) {
+	_, err := DecodeAPI(map[string]any{
+		"name": "x",
+		"onCreate": map[string]any{
+			"type": "text/javascript", "source": "x", "brandNew": true,
+		},
+	}, "")
+	if err == nil {
+		t.Fatal("expected unknown hook field")
+	}
+}
+
+func TestDecodeRejectsNonEmptyHookGlobals(t *testing.T) {
+	_, err := DecodeAPI(map[string]any{
+		"name": "x",
+		"onCreate": map[string]any{
+			"type":    "text/javascript",
+			"source":  "x",
+			"globals": map[string]any{"foo": "bar"},
+		},
+	}, "")
+	if err == nil {
+		t.Fatal("expected non-empty globals")
+	}
+}
+
 func TestDecodeRejectsUnknownPropertyField(t *testing.T) {
 	_, err := DecodeAPI(map[string]any{
 		"name": "x",

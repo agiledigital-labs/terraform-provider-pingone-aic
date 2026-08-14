@@ -92,7 +92,7 @@ That writes:
 - `generated/scripts.tf` + `generated/scripts/*.js`
 - `generated/oauth2_clients.tf` — one resource per OAuth2 client, defaults omitted
 - `generated/esv_variables.tf` / `generated/esv_secrets.tf`
-- `generated/managed_objects.tf` — custom types only
+- `generated/managed_objects.tf` — custom types only, plus `hooks/*.js` for inline lifecycle scripts
 - `generated/idm_endpoints.tf` + `generated/endpoints/*.js`
 - `generated/idm_schedules.tf` + `generated/schedules/*.js`
 - `generated/journey_<name>.tf` — nodes + tree, defaults omitted, UUIDs replaced
@@ -101,8 +101,9 @@ That writes:
 **`-out` is a regenerated directory, not just a write target.** Each run deletes
 the previous run's `provider.tf`, `scripts.tf`, `oauth2_clients.tf`,
 `esv_*.tf`, `managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`,
-`journey_*.tf`, `scripts/*.js`, `endpoints/*.js` and `schedules/*.js`, so an
-object removed in the tenant does not linger as a stale file. To make that safe it drops a `.pingoneaic-generated` marker and **refuses
+`journey_*.tf`, `scripts/*.js`, `endpoints/*.js`, `schedules/*.js` and
+`hooks/*.js`, so an object removed in the tenant does not linger as a stale
+file. To make that safe it drops a `.pingoneaic-generated` marker and **refuses
 to touch a directory that has no marker but does hold matching files** — so
 pointing `-out` at hand-written config is an error, not a silent delete. Keep
 your own files somewhere else.
@@ -137,9 +138,11 @@ terraform {
 ## What this experiment is _not_
 
 - A complete AIC provider. SAML, secret mappings, the realm-wide OIDC
-  provider, Ping-shipped managed objects (`alpha_user`, …), and managed-object
-  lifecycle hooks are out of scope until that path is proven. ESV writes never
-  restart the tenant. Schedule copies default to `enabled = false`.
+  provider, and Ping-shipped managed objects (`alpha_user`, …) themselves are
+  out of scope until that path is proven. Lifecycle hooks are `hook` blocks on
+  a custom `pingoneaic_managed_object` — apply never writes them onto
+  `alpha_user`. ESV writes never restart the tenant. Schedule copies default
+  to `enabled = false`.
 - A dump of AIC's JSON. If a field is missing, that is a catalog gap, not an
   invitation to `jsonencode()`.
 

@@ -58,7 +58,11 @@ func seedDir(t *testing.T, dir string, names ...string) {
 		t.Fatal(err)
 	}
 	for _, name := range names {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("test"), 0o644); err != nil {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -66,7 +70,7 @@ func seedDir(t *testing.T, dir string, names ...string) {
 
 func TestCleanGeneratedFilesRemovesOnlyOurOutput(t *testing.T) {
 	dir := t.TempDir()
-	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "esv_variables.tf", "esv_secrets.tf", "managed_objects.tf", "idm_endpoints.tf", "idm_schedules.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
+	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "esv_variables.tf", "esv_secrets.tf", "managed_objects.tf", "idm_endpoints.tf", "idm_schedules.tf", "journey_old.tf", filepath.Join("scripts", "old.js"), filepath.Join("hooks", "old.onCreate.js")}
 	seedDir(t, dir, append(generated, "notes.md", generatedMarker)...)
 
 	if err := cleanGeneratedFiles(dir); err != nil {

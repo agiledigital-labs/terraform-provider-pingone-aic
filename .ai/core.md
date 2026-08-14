@@ -141,8 +141,8 @@ is not in the realm).
 `-out` is **owned** by the tool: each run deletes the previous run's
 `provider.tf`, `scripts.tf`, `oauth2_clients.tf`, `esv_*.tf`,
 `managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`, `journey_*.tf`,
-`scripts/*.js`, `endpoints/*.js` and `schedules/*.js` so deleted objects don't
-linger. It writes a `.pingoneaic-generated` marker to claim the
+`scripts/*.js`, `endpoints/*.js`, `schedules/*.js` and `hooks/*.js` so deleted
+objects don't linger. It writes a `.pingoneaic-generated` marker to claim the
 directory and refuses to delete anything in a directory that lacks the marker
 but holds matching files — that guard is what stops `-out examples` eating
 hand-written config. Progress goes to `Options.Progress` (stderr from the CLI);
@@ -305,10 +305,13 @@ shapes from memory.
 ## Scope
 
 In scope: scripts, journeys, journey nodes, OAuth2 clients, ESVs (variables and
-secrets), custom managed-object types, IDM endpoints and schedules. Explicitly
+secrets), custom managed-object types (including lifecycle hook blocks), IDM
+endpoints and schedules. Explicitly
 **out** of scope until that path is proven: SAML, secret mappings, the
-realm-wide OIDC provider service, Ping-shipped managed objects (`alpha_user`,
-…), managed-object lifecycle hooks.
+realm-wide OIDC provider service, and Ping-shipped managed objects
+(`alpha_user`, …) themselves. Lifecycle hooks are `hook` blocks on
+`pingoneaic_managed_object` (custom types only) — never written onto
+`alpha_user`.
 
 IDM config (`/openidm/config/…`) must **not** send `Accept-API-Version`.
 Schedule copies default to `enabled = false` so they cannot fire.

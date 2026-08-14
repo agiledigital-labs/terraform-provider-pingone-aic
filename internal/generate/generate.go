@@ -213,6 +213,7 @@ func generatedPaths(outDir string) ([]string, error) {
 		filepath.Join(outDir, "scripts", "*.js"),
 		filepath.Join(outDir, "endpoints", "*.js"),
 		filepath.Join(outDir, "schedules", "*.js"),
+		filepath.Join(outDir, "hooks", "*.js"),
 	} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
