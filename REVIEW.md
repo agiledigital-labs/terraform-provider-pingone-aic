@@ -37,6 +37,11 @@ findings). Each should name the guard that will eventually retire it.
   allowlist will reject in production. _Guard: none automated — the sweep is
   manual. A `-tags live` test reading a fixture directory would retire it._
 
+- **Error identity must survive wrapping.** A helper that classifies an error
+  (`IsNotFound` and friends) must use `errors.As`/`errors.Is`, never a bare
+  type assertion — the bug is invisible until someone adds a `%w` upstream.
+  _Guard: `errorlint`, enabled 2026-08-14._
+
 ## Findings log
 
 ### 2026-08-14 — Node `version` default breaks apply when AM omits the key
@@ -100,6 +105,22 @@ findings). Each should name the guard that will eventually retire it.
   describes a user-visible scenario, check that it calls the code path the user
   would hit, not the helper underneath it.
 
+### 2026-08-14 — `IsNotFound` was blind to wrapped errors
+
+- **What:** `client.IsNotFound` used a bare type assertion, so a 404 wrapped
+  with `%w` read as "still exists". It gates the "resource is gone, drop it
+  from state" path in all three resources, so `Read` would surface an error
+  instead of removing the resource and `apply` would never converge on an
+  out-of-band deletion.
+- **Why missed:** latent, not live — every read path today returns `*APIError`
+  unwrapped, so no test could fail and no review would see a symptom. The
+  client wraps with `%w` in two dozen places; one future wrap in a getter
+  would have armed it silently. Neither the craft review nor the original
+  change looked for *error-identity* bugs, only for value bugs.
+- **Guard:** applied. `errors.As`, plus a table test over bare/once/twice
+  wrapped 404s that was verified to fail before the fix. `errorlint` is now
+  in the gate set and would catch the next one.
+
 ### 2026-08-14 — Allowlist rejected a shape a sixth of the tenant carries
 
 - **What:** `treeUIAttrs` allowed only `uiConfig.categories`, so every journey
@@ -144,8 +165,10 @@ were deleted and confirmed 404 afterwards.
   updating it discards the saved canvas layout. Journeys this provider creates
   have none, so it only bites on import. Fix would be to round-trip the raw
   value through state.
-- **No linter beyond gofmt/go vet.** None of the defects above are
-  vet-detectable. Proposed: `golangci-lint` in the flake and the `.#ci` shell
-  with `errcheck`, `gocritic`, `dupl`, `unparam`. Deferred as its own slice —
-  turning it on will surface a wave of pre-existing findings that should not be
-  mixed into a defect-fix change.
+- **Should more linters go on?** Free today (0 findings each): `bodyclose`,
+  `nilerr`, `noctx`, `misspell`, `copyloopvar`, `wastedassign` — `bodyclose`
+  and `nilerr` are cheap insurance for an HTTP-client-shaped repo. `revive`
+  would add 50, 49 of them missing doc comments on exported symbols: a real
+  but separate documentation slice. `gosec` (6) wants 0600/0750 on generated
+  `.tf` and `.js` output, which is wrong here — those are meant to be readable
+  and committed.
