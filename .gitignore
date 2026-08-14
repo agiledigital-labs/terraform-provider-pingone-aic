@@ -1,0 +1,39 @@
+# Binaries
+/terraform-provider-pingone-aic
+/pingoneaic-tf
+/bin/
+*.exe
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform.rc
+
+# Generated local experiment output
+/generated/
+/examples/**/terraform.tfstate*
+
+# Local aic agent leftovers if someone runs `aic` from this checkout
+.aic/
+
+# Secrets — never commit JWKs, tokens, or env files
+*.jwk
+*.pem
+.env
+.env.*
+.token-cache
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
