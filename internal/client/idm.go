@@ -105,7 +105,7 @@ func ConfigID(kind, name string) string {
 func unknownKeys(raw map[string]any, known map[string]struct{}) []string {
 	var unknown []string
 	for k := range raw {
-		if k == "_id" {
+		if k == "_id" || k == "_rev" {
 			continue
 		}
 		if _, ok := known[k]; !ok {

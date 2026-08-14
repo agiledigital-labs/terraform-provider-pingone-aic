@@ -1,0 +1,9 @@
+{
+  "_id": "openidm-tasks-manager",
+  "_rev": "023a254e-5e13-4fbc-a286-4ac867262e43-21",
+  "privileges": [],
+  "condition": null,
+  "name": "openidm-tasks-manager",
+  "description": "Allowed to reassign workflow tasks",
+  "temporalConstraints": []
+}

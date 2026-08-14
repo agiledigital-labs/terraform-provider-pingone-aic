@@ -1,0 +1,9 @@
+{
+  "_id": "openidm-admin",
+  "_rev": "023a254e-5e13-4fbc-a286-4ac867262e43-17",
+  "privileges": [],
+  "condition": null,
+  "name": "openidm-admin",
+  "description": "Administrative access",
+  "temporalConstraints": []
+}

@@ -1,0 +1,300 @@
+{
+  "_id": "542bdd89-ebe5-4b29-a618-54a0159f307c",
+  "_rev": "e9e73a0b-e50c-4ded-a824-7c796fd136c6-57684",
+  "privileges": [
+    {
+      "path": "managed/alpha_user",
+      "name": "Alpha realm - Users",
+      "actions": [],
+      "permissions": [
+        "VIEW"
+      ],
+      "accessFlags": [
+        {
+          "attribute": "userName",
+          "readOnly": true
+        },
+        {
+          "attribute": "password",
+          "readOnly": true
+        },
+        {
+          "attribute": "givenName",
+          "readOnly": true
+        },
+        {
+          "attribute": "cn",
+          "readOnly": true
+        },
+        {
+          "attribute": "sn",
+          "readOnly": true
+        },
+        {
+          "attribute": "mail",
+          "readOnly": true
+        },
+        {
+          "attribute": "description",
+          "readOnly": true
+        },
+        {
+          "attribute": "accountStatus",
+          "readOnly": true
+        },
+        {
+          "attribute": "telephoneNumber",
+          "readOnly": true
+        },
+        {
+          "attribute": "postalAddress",
+          "readOnly": true
+        },
+        {
+          "attribute": "city",
+          "readOnly": true
+        },
+        {
+          "attribute": "postalCode",
+          "readOnly": true
+        },
+        {
+          "attribute": "country",
+          "readOnly": true
+        },
+        {
+          "attribute": "stateProvince",
+          "readOnly": true
+        },
+        {
+          "attribute": "roles",
+          "readOnly": true
+        },
+        {
+          "attribute": "manager",
+          "readOnly": true
+        },
+        {
+          "attribute": "authzRoles",
+          "readOnly": true
+        },
+        {
+          "attribute": "reports",
+          "readOnly": true
+        },
+        {
+          "attribute": "effectiveRoles",
+          "readOnly": true
+        },
+        {
+          "attribute": "effectiveAssignments",
+          "readOnly": true
+        },
+        {
+          "attribute": "lastSync",
+          "readOnly": true
+        },
+        {
+          "attribute": "kbaInfo",
+          "readOnly": true
+        },
+        {
+          "attribute": "preferences",
+          "readOnly": true
+        },
+        {
+          "attribute": "consentedMappings",
+          "readOnly": true
+        },
+        {
+          "attribute": "ownerOfOrg",
+          "readOnly": true
+        },
+        {
+          "attribute": "adminOfOrg",
+          "readOnly": true
+        },
+        {
+          "attribute": "memberOfOrg",
+          "readOnly": true
+        },
+        {
+          "attribute": "memberOfOrgIDs",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedString1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedString2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedString3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedString4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedString5",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedString1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedString2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedString3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedString4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedString5",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedMultivalued1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedMultivalued2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedMultivalued3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedMultivalued4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedMultivalued5",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedMultivalued1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedMultivalued2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedMultivalued3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedMultivalued4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedMultivalued5",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedDate1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedDate2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedDate3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedDate4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedDate5",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedDate1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedDate2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedDate3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedDate4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedDate5",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedInteger1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedInteger2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedInteger3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedInteger4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frIndexedInteger5",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedInteger1",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedInteger2",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedInteger3",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedInteger4",
+          "readOnly": true
+        },
+        {
+          "attribute": "frUnindexedInteger5",
+          "readOnly": true
+        },
+        {
+          "attribute": "aliasList",
+          "readOnly": true
+        },
+        {
+          "attribute": "_id",
+          "readOnly": true
+        }
+      ]
+    }
+  ],
+  "condition": null,
+  "name": "my-role",
+  "description": "My role's description",
+  "temporalConstraints": []
+}

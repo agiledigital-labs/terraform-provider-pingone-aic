@@ -125,6 +125,7 @@ func (p *aicProvider) Resources(_ context.Context) []func() resource.Resource {
 		resources.NewIDMScheduleResource,
 		resources.NewAccessRuleResource,
 		resources.NewAuthenticationMappingResource,
+		resources.NewInternalRoleResource,
 	}
 	for _, spec := range nodetype.All() {
 		s := spec

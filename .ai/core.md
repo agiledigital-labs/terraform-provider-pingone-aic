@@ -13,7 +13,8 @@ An **experimental** Terraform provider (terraform-plugin-framework, Go 1.25) for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey node types those trees
 use, OAuth2 clients, ESVs, custom managed-object types, IDM endpoints and
-schedules, and individual `config/access` / `config/authentication` rules.
+schedules, individual `config/access` / `config/authentication` rules,
+and IDM internal roles.
 User-facing overview lives in [README.md](../README.md) — don't
 duplicate it here.
 
@@ -35,7 +36,7 @@ unrecognised key.
 | `main.go`             | provider plugin entrypoint (`registry.terraform.io/agiledigital-labs/pingone-aic`)        |
 | `cmd/generate/`       | `pingoneaic-tf` CLI — pulls live tenant config into reviewable HCL                        |
 | `internal/provider/`  | provider schema, config resolution, resource registration                                 |
-| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go`, `idm_endpoint.go`, `idm_schedule.go`, `access_rule.go`, `authentication_mapping.go` (node resources are one generic type driven by each catalog `Spec`) |
+| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go`, `idm_endpoint.go`, `idm_schedule.go`, `access_rule.go`, `authentication_mapping.go`, `internal_role.go` (node resources are one generic type driven by each catalog `Spec`) |
 | `internal/nodetype/`  | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                |
 | `internal/oauth2client/` | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                             |
 | `internal/managedobject/` | typed decode/encode for one custom managed-object type (relationships remapped)                              |
@@ -142,7 +143,7 @@ is not in the realm).
 `-out` is **owned** by the tool: each run deletes the previous run's
 `provider.tf`, `scripts.tf`, `oauth2_clients.tf`, `esv_*.tf`,
 `managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`,
-`access_rules.tf.review`, `authentication_mappings.tf.review`, `journey_*.tf`,
+`access_rules.tf.review`, `authentication_mappings.tf.review`, `internal_roles.tf`, `journey_*.tf`,
 `scripts/*.js`, `endpoints/*.js`, `schedules/*.js` and `hooks/*.js` so deleted
 objects don't linger. It writes a `.pingoneaic-generated` marker to claim the
 directory and refuses to delete anything in a directory that lacks the marker
@@ -314,8 +315,8 @@ shapes from memory.
 
 In scope: scripts, journeys, journey nodes, OAuth2 clients, ESVs (variables and
 secrets), custom managed-object types (including lifecycle hook blocks), IDM
-endpoints and schedules, and **individual** `config/access` rules /
-`config/authentication` `staticUserMapping` entries. Explicitly
+endpoints and schedules, **individual** `config/access` rules /
+`config/authentication` `staticUserMapping` entries, and IDM internal roles. Explicitly
 **out** of scope until that path is proven: SAML, secret mappings, the
 realm-wide OIDC provider service, Ping-shipped managed objects
 (`alpha_user`, …) themselves, and the rest of `rsFilter`
@@ -336,6 +337,15 @@ removes that one copy. A rule whose hash already exists is refused on create
 `resource_prefix` does not apply — there is no name to prefix, and applying
 generated copies would append duplicate grants. Generate therefore writes
 `.tf.review` files, not applyable `.tf`.
+
+**Internal roles are keyed by a chosen `_id`.** `PUT /openidm/internal/role/{id}`
+creates with that id (the console's POST path yields a random UUID). Access
+rules must reference `internal/role/{_id}`, never the role `name`. PUT is a
+destructive replace — always send `privileges` (empty list is fine). Updates
+re-GET and send `If-Match: <_rev>`. Strip `temporalConstraints` (even `[]` is
+rejected). `Accept-API-Version: resource=1.0`. Privilege `accessFlags` uses
+that spelling, not the schema's `accessflags`. A non-VIEW permission needs at
+least one `read_only = false` flag.
 
 **Managed config writes are not read-your-writes.** `ReplaceManagedConfirmed`
 re-reads until the new type is visible. Never PUT a document that was not

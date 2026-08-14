@@ -4,7 +4,8 @@ An **experimental** Terraform provider for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey nodes those trees
 actually use, OAuth2 clients, ESVs, custom managed-object types, IDM
-endpoints and schedules, and individual IDM access / authentication rules.
+endpoints and schedules, individual IDM access / authentication rules, and
+internal roles.
 
 This is not a JSON-passthrough wrapper around the AIC REST API. Every attribute
 is typed against a catalog we verified on a live tenant. When AIC adds, removes,
@@ -48,6 +49,7 @@ not hardcoded UUIDs.
 | `pingoneaic_idm_schedule`             | `/openidm/config/schedule/{name}`                          |
 | `pingoneaic_access_rule`              | one `configs[]` grant in `/openidm/config/access`          |
 | `pingoneaic_authentication_mapping`   | one `rsFilter.staticUserMapping[]` entry                   |
+| `pingoneaic_internal_role`            | `/openidm/internal/role/{id}`                              |
 | `pingoneaic_<type>_node`              | every other node type used by the generate catalog         |
 
 `success` and `failure` are valid connection targets (AM's built-in static
@@ -77,6 +79,12 @@ rather than applyable copies — applying generated HCL would append duplicate
 grants. Import an existing rule by its hash; create is refused if that hash
 is already in the document. `roles` is a comma-separated string on an access
 rule and an array on an authentication mapping.
+
+`pingoneaic_internal_role` `name` is the `_id` you choose (prefixed on the
+wire). That is the string access rules must use (`internal/role/Terraform_desk`),
+not `display_name`. PUT replaces the whole role; updates send `If-Match`.
+Console-created roles have a UUID `_id` — generate emits them under their
+display name so apply creates a copy with a chosen id.
 
 ## Authentication
 
@@ -114,6 +122,8 @@ That writes:
 - `generated/idm_schedules.tf` + `generated/schedules/*.js`
 - `generated/access_rules.tf.review` / `authentication_mappings.tf.review` —
   existing rules, identified by hash; **not** loaded by Terraform
+- `generated/internal_roles.tf` — one resource per internal role; UUID `_id`s
+  are emitted under the display name so apply creates a chosen-id copy
 - `generated/journey_<name>.tf` — nodes + tree, defaults omitted, UUIDs replaced
   with Terraform references
 
@@ -121,6 +131,7 @@ That writes:
 the previous run's `provider.tf`, `scripts.tf`, `oauth2_clients.tf`,
 `esv_*.tf`, `managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`,
 `access_rules.tf.review`, `authentication_mappings.tf.review`,
+`internal_roles.tf`,
 `journey_*.tf`, `scripts/*.js`, `endpoints/*.js`, `schedules/*.js` and
 `hooks/*.js`, so an object removed in the tenant does not linger as a stale
 file. To make that safe it drops a `.pingoneaic-generated` marker and **refuses

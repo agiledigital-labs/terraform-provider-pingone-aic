@@ -44,6 +44,7 @@ type Result struct {
 	Schedules      int
 	AccessRules    int
 	AuthMappings   int
+	Roles          int
 	Files          []string
 }
 
@@ -122,15 +123,19 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	if err := g.ingestAccess(ctx); err != nil {
 		return nil, err
 	}
+	progressf(opt, "Listing internal roles")
+	if err := g.ingestRoles(ctx); err != nil {
+		return nil, err
+	}
 
 	res := &Result{
 		Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes),
 		OAuth2Clients: len(g.oauth2), Variables: len(g.variables), Secrets: len(g.secrets),
 		ManagedObjects: len(g.managed), Endpoints: len(g.endpoints), Schedules: len(g.schedules),
-		AccessRules: len(g.accessRules), AuthMappings: len(g.authMappings),
+		AccessRules: len(g.accessRules), AuthMappings: len(g.authMappings), Roles: len(g.roles),
 	}
-	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), %d oauth2 client(s), %d variable(s), %d secret(s), %d managed object(s), %d endpoint(s), %d schedule(s), %d access rule(s), %d auth mapping(s) to %s",
-		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, res.ManagedObjects, res.Endpoints, res.Schedules, res.AccessRules, res.AuthMappings, opt.OutDir)
+	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), %d oauth2 client(s), %d variable(s), %d secret(s), %d managed object(s), %d endpoint(s), %d schedule(s), %d access rule(s), %d auth mapping(s), %d role(s) to %s",
+		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, res.ManagedObjects, res.Endpoints, res.Schedules, res.AccessRules, res.AuthMappings, res.Roles, opt.OutDir)
 	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
 		return nil, err
 	}
@@ -160,6 +165,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		return nil, err
 	}
 	if err := g.writeAccess(); err != nil {
+		return nil, err
+	}
+	if err := g.writeRoles(); err != nil {
 		return nil, err
 	}
 	res.Files = g.files
@@ -219,6 +227,7 @@ func generatedPaths(outDir string) ([]string, error) {
 		filepath.Join(outDir, "idm_schedules.tf"),
 		filepath.Join(outDir, "access_rules.tf.review"),
 		filepath.Join(outDir, "authentication_mappings.tf.review"),
+		filepath.Join(outDir, "internal_roles.tf"),
 	}
 	for _, pattern := range []string{
 		filepath.Join(outDir, "journey_*.tf"),
@@ -288,7 +297,7 @@ func writeMarker(outDir string) error {
 	body := "# Written by pingoneaic-tf. This directory is regenerated: files\n" +
 		"# matching provider.tf, scripts.tf, oauth2_clients.tf, esv_variables.tf,\n" +
 		"# esv_secrets.tf, managed_objects.tf, idm_*.tf, access_rules.tf.review,\n" +
-		"# authentication_mappings.tf.review, journey_*.tf and scripts/*.js are deleted on each run.\n" +
+		"# authentication_mappings.tf.review, internal_roles.tf, journey_*.tf and scripts/*.js are deleted on each run.\n" +
 		"# Do not keep hand-written config here.\n"
 	return os.WriteFile(filepath.Join(outDir, generatedMarker), []byte(body), 0o644)
 }
@@ -311,6 +320,7 @@ type gen struct {
 	schedules    []emittedSchedule
 	accessRules  []emittedAccessRule
 	authMappings []emittedAuthMapping
+	roles        []emittedRole
 }
 
 type emittedNode struct {
