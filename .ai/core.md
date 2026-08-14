@@ -9,7 +9,7 @@ Canonical instructions for all AI agents working in this repo. `CLAUDE.md` and
 > too if it is present; `.ai/local.md.example` is the committed template. Never
 > move machine-specific paths into this file, and never commit `local.md`.
 
-An **experimental** Terraform provider (terraform-plugin-framework, Go 1.24) for
+An **experimental** Terraform provider (terraform-plugin-framework, Go 1.25) for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, and the journey node types those
 trees use. User-facing overview lives in [README.md](../README.md) — don't

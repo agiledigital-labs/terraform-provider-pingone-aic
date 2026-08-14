@@ -32,7 +32,7 @@
         pkgs:
         let
           # Everything needed to build, gate and test the Go code.
-          # go.mod requires >= 1.24.
+          # go.mod requires >= 1.25.
           goToolchain = [
             pkgs.go
             pkgs.gnumake
