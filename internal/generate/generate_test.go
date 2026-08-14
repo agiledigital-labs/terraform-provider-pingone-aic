@@ -1,6 +1,12 @@
 package generate
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
 
 func TestSanitizeIdent(t *testing.T) {
 	tests := map[string]string{
@@ -14,6 +20,47 @@ func TestSanitizeIdent(t *testing.T) {
 		if got := sanitizeIdent(in); got != want {
 			t.Fatalf("sanitizeIdent(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestSelectJourneysRejectsMissingNames(t *testing.T) {
+	got, err := selectJourneys([]string{"One", "Two"}, []string{"Two", "Missing"})
+	if err == nil || !strings.Contains(err.Error(), "Missing") {
+		t.Fatalf("got %#v, %v; want missing-name error", got, err)
+	}
+}
+
+func TestSelectJourneysPreservesTenantOrder(t *testing.T) {
+	got, err := selectJourneys([]string{"One", "Two", "Three"}, []string{"Three", "One"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"One", "Three"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestCleanGeneratedFilesLeavesUnrelatedFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	generated := []string{"provider.tf", "scripts.tf", "journey_old.tf", filepath.Join("scripts", "old.js")}
+	for _, name := range append(generated, "notes.md") {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := cleanGeneratedFiles(dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range generated {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("generated file %q still exists", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "notes.md")); err != nil {
+		t.Fatalf("unrelated file removed: %v", err)
 	}
 }
 

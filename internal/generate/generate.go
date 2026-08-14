@@ -51,17 +51,10 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		return nil, err
 	}
 	if len(opt.Journeys) > 0 {
-		want := map[string]struct{}{}
-		for _, n := range opt.Journeys {
-			want[n] = struct{}{}
+		names, err = selectJourneys(names, opt.Journeys)
+		if err != nil {
+			return nil, err
 		}
-		filtered := names[:0]
-		for _, n := range names {
-			if _, ok := want[n]; ok {
-				filtered = append(filtered, n)
-			}
-		}
-		names = filtered
 	}
 
 	g := &gen{
@@ -91,6 +84,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	}
 
 	res := &Result{Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes)}
+	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
+		return nil, err
+	}
 
 	if err := g.writeProvider(); err != nil {
 		return nil, err
@@ -103,6 +99,56 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	}
 	res.Files = g.files
 	return res, nil
+}
+
+func selectJourneys(available, requested []string) ([]string, error) {
+	want := make(map[string]struct{}, len(requested))
+	for _, name := range requested {
+		want[name] = struct{}{}
+	}
+	found := make(map[string]struct{}, len(requested))
+	selected := make([]string, 0, len(requested))
+	for _, name := range available {
+		if _, ok := want[name]; ok {
+			selected = append(selected, name)
+			found[name] = struct{}{}
+		}
+	}
+	missing := make([]string, 0)
+	for name := range want {
+		if _, ok := found[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return nil, fmt.Errorf("requested journeys not found in realm: %s", strings.Join(missing, ", "))
+	}
+	return selected, nil
+}
+
+func cleanGeneratedFiles(outDir string) error {
+	patterns := []string{
+		filepath.Join(outDir, "journey_*.tf"),
+		filepath.Join(outDir, "scripts", "*.js"),
+	}
+	paths := []string{
+		filepath.Join(outDir, "provider.tf"),
+		filepath.Join(outDir, "scripts.tf"),
+	}
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return fmt.Errorf("match old generated files %q: %w", pattern, err)
+		}
+		paths = append(paths, matches...)
+	}
+	for _, path := range paths {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove old generated file %q: %w", path, err)
+		}
+	}
+	return nil
 }
 
 type gen struct {
