@@ -307,9 +307,10 @@ re-reads until the new type is visible. Never PUT a document that was not
 just read — other types in `objects[]` must be preserved.
 
 **ESV ids cannot take `Terraform_` as a prefix.** AIC requires
-`^esv-[a-z0-9_-]{1,124}$`. `prefix.ApplyESV` lowercases the provider prefix and
-inserts it after `esv-`. **Never restart the tenant from apply.** `loaded` is
-computed; a write leaves the ESV pending until an operator restarts.
+`^esv-[a-z0-9_-]{1,124}$`. `prefix.ApplyESV` lowercases the provider prefix,
+turns underscores into hyphens, and inserts it after `esv-`
+(`esv-test11` → `esv-terraform-test11`). **Never restart the tenant from apply.**
+`loaded` is computed; a write leaves the ESV pending until an operator restarts.
 
 ## Secrets
 

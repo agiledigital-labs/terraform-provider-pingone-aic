@@ -32,7 +32,7 @@ func TestPutVariableUsesESVVersionAndRejectsBadID(t *testing.T) {
 	var gotVersion string
 	httpClient := testutil.Client(func(req *http.Request) (*http.Response, error) {
 		gotVersion = req.Header.Get("Accept-API-Version")
-		body := `{"_id":"esv-terraform_test11","expressionType":"string","loaded":false,"valueBase64":"dGVzdDE="}`
+		body := `{"_id":"esv-terraform-test11","expressionType":"string","loaded":false,"valueBase64":"dGVzdDE="}`
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 	})
 	c, err := New(Config{TenantURL: "https://tenant.example", AccessToken: "token", HTTPClient: httpClient})
@@ -42,7 +42,7 @@ func TestPutVariableUsesESVVersionAndRejectsBadID(t *testing.T) {
 	if _, err := c.PutVariable(context.Background(), "Nope", Variable{Value: "x", ExpressionType: "string"}); err == nil {
 		t.Fatal("expected id rejection")
 	}
-	if _, err := c.PutVariable(context.Background(), "esv-terraform_test11", Variable{Value: "test1", ExpressionType: "string"}); err != nil {
+	if _, err := c.PutVariable(context.Background(), "esv-terraform-test11", Variable{Value: "test1", ExpressionType: "string"}); err != nil {
 		t.Fatal(err)
 	}
 	if gotVersion != ESVAPIVersion {

@@ -69,7 +69,7 @@ func (g *gen) writeVariables() error {
 	}
 	var b strings.Builder
 	b.WriteString("# Generated ESV variables. Values are plaintext here; the provider base64-encodes on the wire.\n")
-	b.WriteString("# Applying these creates prefixed copies (esv-terraform_…). They stay loaded=false until a tenant restart, which this tool never triggers.\n\n")
+	b.WriteString("# Applying these creates prefixed copies (esv-terraform-…). They stay loaded=false until a tenant restart, which this tool never triggers.\n\n")
 	for _, e := range g.variables {
 		v := e.Var
 		b.WriteString(fmt.Sprintf("resource \"pingoneaic_esv_variable\" %q {\n", e.Label))

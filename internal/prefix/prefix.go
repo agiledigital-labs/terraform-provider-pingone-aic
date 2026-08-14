@@ -28,13 +28,21 @@ func Has(prefix, name string) bool {
 }
 
 // ESV IDs must match ^esv-[a-z0-9_-]{1,124}$. The provider prefix
-// (default Terraform_) is therefore lowercased and inserted after
-// the mandatory esv- marker: esv-test11 → esv-terraform_test11.
+// (default Terraform_) is lowercased, underscores become hyphens, and
+// the result is inserted after esv-: esv-test11 → esv-terraform-test11.
 func SanitizeESV(prefix string) string {
 	var b strings.Builder
+	lastHyphen := false
 	for _, r := range strings.ToLower(prefix) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			b.WriteRune(r)
+			lastHyphen = false
+		case r == '_' || r == '-':
+			if !lastHyphen {
+				b.WriteByte('-')
+				lastHyphen = true
+			}
 		}
 	}
 	return b.String()

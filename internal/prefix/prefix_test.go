@@ -28,16 +28,19 @@ func TestStrip(t *testing.T) {
 }
 
 func TestApplyESVInsertsSanitizedPrefixAfterMarker(t *testing.T) {
-	if got := ApplyESV("Terraform_", "esv-test11"); got != "esv-terraform_test11" {
+	if got := SanitizeESV("Terraform_"); got != "terraform-" {
+		t.Fatalf("SanitizeESV = %q", got)
+	}
+	if got := ApplyESV("Terraform_", "esv-test11"); got != "esv-terraform-test11" {
 		t.Fatalf("ApplyESV = %q", got)
 	}
-	if got := ApplyESV("Terraform_", "esv-terraform_test11"); got != "esv-terraform_test11" {
+	if got := ApplyESV("Terraform_", "esv-terraform-test11"); got != "esv-terraform-test11" {
 		t.Fatalf("idempotent = %q", got)
 	}
 	if got := ApplyESV("", "esv-test11"); got != "esv-test11" {
 		t.Fatalf("empty prefix = %q", got)
 	}
-	if got := StripESV("Terraform_", "esv-terraform_test11"); got != "esv-test11" {
+	if got := StripESV("Terraform_", "esv-terraform-test11"); got != "esv-test11" {
 		t.Fatalf("StripESV = %q", got)
 	}
 }

@@ -46,7 +46,7 @@ func (r *esvVariableResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "An AIC environment variable (`/environment/variables`). Tenant-global; no realm. " +
 			"`name` is the logical ESV id (`esv-…`). The provider inserts a sanitised `resource_prefix` " +
-			"after `esv-` (so `Terraform_` + `esv-test11` becomes `esv-terraform_test11`) because AIC " +
+			"after `esv-` (so `Terraform_` + `esv-test11` becomes `esv-terraform-test11`) because AIC " +
 			"rejects ids that do not match `^esv-[a-z0-9_-]{1,124}$`.\n\n" +
 			"`loaded` is computed. A create or update leaves the variable pending until someone restarts " +
 			"the tenant; this resource never triggers that restart.",

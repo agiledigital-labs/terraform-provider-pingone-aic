@@ -16,7 +16,7 @@ provider stays honest, and how we expect fixes to arrive (issues / PRs).
 The provider prepends a prefix to every **name** it creates (script names,
 journey names, OAuth2 client ids, inner-tree references). ESV ids cannot start
 with `Terraform_` (AIC requires `esv-[a-z0-9_-]+`), so the prefix is lowercased
-and inserted after `esv-`: `esv-test11` becomes `esv-terraform_test11`.
+and inserted after `esv-`: `esv-test11` becomes `esv-terraform-test11`.
 
 ```hcl
 provider "pingoneaic" {
