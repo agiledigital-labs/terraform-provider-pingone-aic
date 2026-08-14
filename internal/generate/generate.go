@@ -188,6 +188,7 @@ type emittedTreeNode struct {
 	ID          string
 	Type        string
 	DisplayName string
+	Version     string
 	Connections map[string]string
 }
 
@@ -197,6 +198,9 @@ func (g *gen) ingestJourney(ctx context.Context, name string) error {
 		return err
 	}
 	if _, err := client.TreeWriteBody(raw); err != nil {
+		return err
+	}
+	if err := client.ValidateTreeInternals(raw); err != nil {
 		return err
 	}
 
@@ -247,6 +251,7 @@ func (g *gen) ingestJourney(ctx context.Context, name string) error {
 			ID:          id,
 			Type:        nt,
 			DisplayName: str(meta["displayName"]),
+			Version:     str(meta["version"]),
 			Connections: conns,
 		})
 	}
@@ -496,6 +501,9 @@ func (g *gen) writeJourneys() error {
 			b.WriteString(fmt.Sprintf("    type = %s\n", hclString(tn.Type)))
 			if tn.DisplayName != "" {
 				b.WriteString(fmt.Sprintf("    display_name = %s\n", hclString(tn.DisplayName)))
+			}
+			if tn.Version != "" && tn.Version != "1.0" {
+				b.WriteString(fmt.Sprintf("    version = %s\n", hclString(tn.Version)))
 			}
 			b.WriteString("    connections = {\n")
 			keys := make([]string, 0, len(tn.Connections))

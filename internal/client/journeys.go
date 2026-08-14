@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 )
 
 type Tree struct {
@@ -131,4 +132,94 @@ func TreeWriteBody(raw map[string]any) (map[string]any, error) {
 		return nil, fmt.Errorf("tree has unmodelled attributes %v — add them to the provider (see internal/client/journeys.go treeWriteAttrs)", unknown)
 	}
 	return out, nil
+}
+
+var (
+	treeUIAttrs     = map[string]struct{}{"categories": {}}
+	treeNodeAttrs   = map[string]struct{}{"connections": {}, "displayName": {}, "nodeType": {}, "version": {}, "x": {}, "y": {}}
+	staticNodeAttrs = map[string]struct{}{"x": {}, "y": {}}
+)
+
+// ValidateTreeInternals enforces the same fail-closed contract as TreeWriteBody
+// for nested tree objects that AM replaces as a whole on PUT.
+func ValidateTreeInternals(raw map[string]any) error {
+	if err := validateObjectKeys(raw["uiConfig"], "uiConfig", treeUIAttrs); err != nil {
+		return err
+	}
+	if err := validateObjectEntries(raw["staticNodes"], "staticNodes", staticNodeAttrs); err != nil {
+		return err
+	}
+	nodes, err := objectValue(raw["nodes"], "nodes")
+	if err != nil {
+		return err
+	}
+	for id, value := range nodes {
+		meta, err := objectValue(value, "nodes."+id)
+		if err != nil {
+			return err
+		}
+		if err := rejectUnknownKeys(meta, "nodes."+id, treeNodeAttrs); err != nil {
+			return err
+		}
+		connections, err := objectValue(meta["connections"], "nodes."+id+".connections")
+		if err != nil {
+			return err
+		}
+		for outcome, destination := range connections {
+			if _, ok := destination.(string); !ok {
+				return fmt.Errorf("nodes.%s.connections.%s must be a string, got %T", id, outcome, destination)
+			}
+		}
+	}
+	return nil
+}
+
+func validateObjectEntries(value any, name string, allowed map[string]struct{}) error {
+	entries, err := objectValue(value, name)
+	if err != nil {
+		return err
+	}
+	for id, value := range entries {
+		entry, err := objectValue(value, name+"."+id)
+		if err != nil {
+			return err
+		}
+		if err := rejectUnknownKeys(entry, name+"."+id, allowed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateObjectKeys(value any, name string, allowed map[string]struct{}) error {
+	object, err := objectValue(value, name)
+	if err != nil {
+		return err
+	}
+	return rejectUnknownKeys(object, name, allowed)
+}
+
+func objectValue(value any, name string) (map[string]any, error) {
+	if value == nil {
+		return map[string]any{}, nil
+	}
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s must be an object, got %T", name, value)
+	}
+	return object, nil
+}
+
+func rejectUnknownKeys(object map[string]any, name string, allowed map[string]struct{}) error {
+	unknown := make([]string, 0)
+	for key := range object {
+		if _, ok := allowed[key]; !ok {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return fmt.Errorf("%s has unmodelled attributes %v", name, unknown)
 }

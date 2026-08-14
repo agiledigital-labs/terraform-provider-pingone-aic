@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -55,6 +56,7 @@ type journeyNodeModel struct {
 	ID          types.String  `tfsdk:"id"`
 	Type        types.String  `tfsdk:"type"`
 	DisplayName types.String  `tfsdk:"display_name"`
+	Version     types.String  `tfsdk:"version"`
 	Connections types.Map     `tfsdk:"connections"`
 	X           types.Float64 `tfsdk:"x"`
 	Y           types.Float64 `tfsdk:"y"`
@@ -123,6 +125,7 @@ func (r *journeyResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 						"id":           schema.StringAttribute{Required: true},
 						"type":         schema.StringAttribute{Required: true, MarkdownDescription: "AM node type, e.g. `ScriptedDecisionNode`."},
 						"display_name": schema.StringAttribute{Optional: true},
+						"version":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("1.0")},
 						"connections": schema.MapAttribute{
 							Required:            true,
 							ElementType:         types.StringType,
@@ -270,7 +273,7 @@ func modelToTree(plan journeyModel, pfx string) (map[string]any, error) {
 		entry := map[string]any{
 			"connections": wired,
 			"nodeType":    n.Type.ValueString(),
-			"version":     "1.0",
+			"version":     n.Version.ValueString(),
 		}
 		if !n.DisplayName.IsNull() && n.DisplayName.ValueString() != "" {
 			entry["displayName"] = n.DisplayName.ValueString()
@@ -357,6 +360,9 @@ func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyMode
 	if _, err := client.TreeWriteBody(raw); err != nil {
 		return journeyModel{}, err
 	}
+	if err := client.ValidateTreeInternals(raw); err != nil {
+		return journeyModel{}, err
+	}
 
 	remote, _ := raw["_id"].(string)
 	name := plan.Name.ValueString()
@@ -420,6 +426,7 @@ func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyMode
 				ID:          types.StringValue(id),
 				Type:        types.StringValue(str(meta, "nodeType")),
 				DisplayName: types.StringNull(),
+				Version:     types.StringValue(str(meta, "version")),
 				Connections: mv,
 			}
 			if dn := str(meta, "displayName"); dn != "" {
