@@ -1,0 +1,67 @@
+# golangci-lint config — see .ai/core.md "Gates".
+#
+# Philosophy: as strong as practical. Prefer one central decision here over
+# scattered //nolint directives; a directive that keeps recurring means either
+# the check is miscalibrated (relax it here, once) or the code is fighting a
+# good check (fix the code).
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # golangci-lint's standard set (errcheck, govet, ineffassign, staticcheck,
+  # unused) plus four picked for the defect classes this repo has actually
+  # shipped — see the findings log in REVIEW.md.
+  default: standard
+  enable:
+    # A third parallel copy of the AM JSON decode helpers reached review once.
+    - dupl
+    # client.IsNotFound used a bare type assertion, so a wrapped *APIError
+    # would have read as "still exists" and stranded a deleted resource.
+    - errorlint
+    - gocritic
+    - unparam
+
+  settings:
+    dupl:
+      threshold: 150
+
+    errcheck:
+      exclude-functions:
+        # A deferred close on a drained response body has nothing actionable
+        # to report; every other unchecked error stays a finding.
+        - (io.ReadCloser).Close
+
+    gocritic:
+      disabled-checks:
+        # Style-only, and it fires on guard-shaped chains ending in `continue`
+        # that do not read better as a switch. Not worth churning correct code.
+        - ifElseChain
+
+    staticcheck:
+      # golangci-lint's defaults, minus two editor "quick fix" suggestions.
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # De Morgan's law on an explicit character-class test makes it harder
+        # to read, not easier.
+        - -QF1001
+        # Suggests fmt.Fprintf(&builder, …) in place of
+        # builder.WriteString(fmt.Sprintf(…)) — which errcheck then flags,
+        # since it cannot know a strings.Builder write never fails.
+        - -QF1012
+
+  exclusions:
+    rules:
+      # dupl's known weak spot is table-driven tests and other deliberately
+      # parallel fixtures. Its value here is catching duplicated production
+      # logic, so keep it off _test.go rather than nolint-ing case by case.
+      - path: _test\.go
+        linters:
+          - dupl

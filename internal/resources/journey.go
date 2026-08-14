@@ -471,10 +471,11 @@ func treeToModel(raw map[string]any, plan journeyModel, pfx string) (journeyMode
 		}
 	}
 
+	// identity_resource is Optional+Computed with no schema default, so
+	// whatever AM reports goes into state as-is — including the realm default
+	// it fills in when unset. Nothing to reconcile against, hence no fallback
+	// here (unlike node version, which does carry a schema default).
 	idRes := types.StringValue(identity)
-	if identity == "managed/"+plan.Realm.ValueString()+"_user" && (plan.IdentityResource.IsNull() || plan.IdentityResource.ValueString() == "" || plan.IdentityResource.ValueString() == identity) {
-		// Keep computed default visible; that's fine.
-	}
 
 	return journeyModel{
 		ID:                 types.StringValue(remote),

@@ -118,7 +118,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 
 func progressf(opt Options, format string, args ...any) {
 	if opt.Progress != nil {
-		fmt.Fprintf(opt.Progress, format+"\n", args...)
+		// Progress is cosmetic; a failed write to the caller's writer is not
+		// worth failing or aborting the run over.
+		_, _ = fmt.Fprintf(opt.Progress, format+"\n", args...)
 	}
 }
 
@@ -357,7 +359,7 @@ func (g *gen) ingestNode(ctx context.Context, id, apiType, hint string) error {
 		return err
 	}
 	if hint == "" {
-		hint = displayHint(vals, apiType, id)
+		hint = displayHint(vals, apiType)
 	}
 	label := g.uniqueLabel(spec.TFResource, hint)
 	g.nodes[id] = emittedNode{ID: id, Spec: spec, Values: vals, Label: label}
@@ -401,7 +403,7 @@ func (g *gen) scriptLabel(s *client.Script) string {
 	return g.uniqueLabel("script", s.Name)
 }
 
-func displayHint(vals map[string]any, apiType, id string) string {
+func displayHint(vals map[string]any, apiType string) string {
 	if s, ok := vals["tree"].(string); ok && s != "" {
 		return s
 	}

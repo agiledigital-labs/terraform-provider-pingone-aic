@@ -113,6 +113,13 @@ func f(api string, kind Kind, def any) Field {
 	}
 }
 
+// req mirrors f for fields AM lists as required. Every current caller happens
+// to pass KindString, so unparam wants the parameter gone — but this is the
+// catalog DSL documented in .ai/core.md, and dropping the kind would make the
+// first required non-string field a signature change instead of a one-line
+// entry.
+//
+//nolint:unparam // deliberately general: keeps req() symmetric with f().
 func req(api string, kind Kind, def any) Field {
 	fl := f(api, kind, def)
 	fl.Required = def == nil

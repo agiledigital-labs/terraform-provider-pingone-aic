@@ -58,7 +58,6 @@ func main() {
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	res, err := generate.Run(ctx, c, generate.Options{
 		Realm:    *realm,
 		OutDir:   *out,
@@ -66,6 +65,9 @@ func main() {
 		Journeys: list,
 		Progress: os.Stderr,
 	})
+	// Called rather than deferred: the error path below exits the process, and
+	// os.Exit does not run deferred functions.
+	stop()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "generate:", err)
 		os.Exit(1)

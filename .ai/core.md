@@ -49,7 +49,7 @@ type is a catalog edit, not a new file.
 ## Commands
 
 The toolchain is pinned by `flake.nix` + `flake.lock` (Go, Terraform, GNU Make,
-gopls). Work inside it so everyone gets the same versions:
+golangci-lint, gopls). Work inside it so everyone gets the same versions:
 
 ```sh
 nix develop                      # interactive shell
@@ -66,6 +66,7 @@ you skip it.
 
 ```sh
 make test          # go test ./...
+make lint          # golangci-lint run ./...
 make build         # -> bin/terraform-provider-pingone-aic
 make generate-cli  # -> bin/pingoneaic-tf
 make install       # build + copy into ~/.terraform.d/plugins/...
@@ -75,15 +76,16 @@ make tidy          # go mod tidy
 
 ## Gates
 
-`gofmt -l .` (must be empty), `go vet ./...`, `go build ./...`, `go test ./...`.
+`gofmt -l .` (must be empty), `go vet ./...`, `go build ./...`, `go test ./...`,
+`golangci-lint run ./...`.
 
 Three places run them, deliberately staged by cost:
 
-| When                   | What runs                                  | Where                        |
-| ---------------------- | ------------------------------------------ | ---------------------------- |
-| every commit           | gofmt on **staged** Go files + secret scan | `.githooks/pre-commit`       |
-| every push             | gofmt, build, vet, test on the whole tree  | `.githooks/pre-push`         |
-| every branch push + PR | the same, via `nix develop .#ci`           | `.github/workflows/test.yml` |
+| When                   | What runs                                       | Where                        |
+| ---------------------- | ----------------------------------------------- | ---------------------------- |
+| every commit           | gofmt on **staged** Go files + secret scan      | `.githooks/pre-commit`       |
+| every push             | gofmt, build, vet, test, lint on the whole tree | `.githooks/pre-push`         |
+| every branch push + PR | the same, via `nix develop .#ci`                | `.github/workflows/test.yml` |
 
 Hooks install themselves when you enter `nix develop` (it sets
 `core.hooksPath=.githooks`); set it by hand otherwise. `--no-verify` bypasses
@@ -95,6 +97,20 @@ The pre-commit secret scan rejects staged lines containing a JWT, a PEM private
 key, or a real `*.forgeblocks.com` hostname. The sandbox hostname belongs in
 `.envrc` (gitignored); use `openam-example.forgeblocks.com` as the placeholder
 in anything committed.
+
+**Linting.** `make lint` runs `golangci-lint` (pinned by the flake, present in
+both shells — it is free software with a cached build, unlike terraform).
+`.golangci.yml` carries the enabled set and, more importantly, the reasoning for
+every check that is off: golangci-lint's standard set plus `dupl`, `errorlint`,
+`gocritic` and `unparam`. Those four were chosen against the defect classes this
+repo has actually shipped — see the findings log in `REVIEW.md`.
+
+The tree is clean, so **any new finding is yours**. Prefer one central decision
+in `.golangci.yml` over scattered suppressions: a spread of `//nolint` means
+either a miscalibrated check (relax it there, once, with the reason) or code
+fighting a good check (fix the code). The one `//nolint` in the tree, on
+`nodetype.req`, carries its justification inline. Do not restructure working
+code to satisfy a style-only check — turn the check off and say why.
 
 CI uses the pinned toolchain via the lean `.#ci` shell, so it cannot drift from
 local. Per-step `nix develop` overhead is ~0.1–0.3s once the store is warm; the

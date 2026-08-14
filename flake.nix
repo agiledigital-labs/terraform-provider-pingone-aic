@@ -33,9 +33,15 @@
         let
           # Everything needed to build, gate and test the Go code.
           # go.mod requires >= 1.25.
+          #
+          # golangci-lint is in the toolchain rather than the default shell
+          # only: it is a gate (`make lint`, pre-push, CI), and unlike
+          # terraform it is free software with a binary-cache build, so the
+          # lean `.#ci` shell pays no source-build cost for it.
           goToolchain = [
             pkgs.go
             pkgs.gnumake
+            pkgs.golangci-lint
           ];
         in
         {

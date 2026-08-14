@@ -28,4 +28,11 @@ go vet ./...
 echo "pre-push: go test"
 go test ./...
 
+echo "pre-push: golangci-lint"
+if ! command -v golangci-lint >/dev/null 2>&1; then
+	echo "pre-push: golangci-lint not found — run inside 'nix develop'" >&2
+	exit 1
+fi
+golangci-lint run ./...
+
 echo "pre-push: ok"

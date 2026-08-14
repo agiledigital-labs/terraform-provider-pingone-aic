@@ -6,7 +6,7 @@ VERSION       := 0.1.0
 OS_ARCH       := $(shell go env GOOS)_$(shell go env GOARCH)
 INSTALL_PATH  := $(HOME)/.terraform.d/plugins/$(HOSTNAME)/$(NAMESPACE)/$(NAME)/$(VERSION)/$(OS_ARCH)
 
-.PHONY: build install generate-cli test fmt tidy
+.PHONY: build install generate-cli test lint fmt tidy
 
 build:
 	go build -o bin/$(PROVIDER_NAME) .
@@ -20,6 +20,10 @@ install: build
 
 test:
 	go test ./...
+
+# Config (enabled set and the reasoning behind it) lives in .golangci.yml.
+lint:
+	golangci-lint run ./...
 
 fmt:
 	gofmt -w .

@@ -36,6 +36,10 @@ jobs:
       - name: go test
         run: nix develop .#ci --command go test ./...
 
+      # Enabled set and the reasoning behind it live in .golangci.yml.
+      - name: golangci-lint
+        run: nix develop .#ci --command golangci-lint run ./...
+
       - name: build provider
         run: nix develop .#ci --command go build -o /tmp/terraform-provider-pingone-aic .
 
