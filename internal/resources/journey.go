@@ -169,7 +169,7 @@ func (r *journeyResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := prefix.Apply(r.client.Prefix, state.Name.ValueString())
+	remote := journeyRemoteName(state, r.client.Prefix)
 	raw, err := r.client.GetTree(ctx, state.Realm.ValueString(), remote)
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
@@ -207,10 +207,20 @@ func (r *journeyResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := prefix.Apply(r.client.Prefix, state.Name.ValueString())
+	remote := journeyRemoteName(state, r.client.Prefix)
 	if err := r.client.DeleteTree(ctx, state.Realm.ValueString(), remote); err != nil {
 		resp.Diagnostics.AddError("Delete journey", err.Error())
 	}
+}
+
+func journeyRemoteName(state journeyModel, pfx string) string {
+	if !state.ID.IsNull() && !state.ID.IsUnknown() && state.ID.ValueString() != "" {
+		return state.ID.ValueString()
+	}
+	if !state.RemoteName.IsNull() && !state.RemoteName.IsUnknown() && state.RemoteName.ValueString() != "" {
+		return state.RemoteName.ValueString()
+	}
+	return prefix.Apply(pfx, state.Name.ValueString())
 }
 
 func (r *journeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

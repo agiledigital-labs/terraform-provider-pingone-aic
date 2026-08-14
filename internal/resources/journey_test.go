@@ -53,3 +53,25 @@ func TestTreeToModelPreservesTimeoutSettings(t *testing.T) {
 		t.Fatalf("timeouts not preserved: %#v", got)
 	}
 }
+
+func TestJourneyRemoteNameUsesPersistedIDAcrossPrefixChanges(t *testing.T) {
+	state := journeyModel{
+		ID:         types.StringValue("OldPrefix_Tree"),
+		RemoteName: types.StringValue("OldPrefix_Tree"),
+		Name:       types.StringValue("Tree"),
+	}
+	if got := journeyRemoteName(state, "NewPrefix_"); got != "OldPrefix_Tree" {
+		t.Fatalf("got %q, want persisted remote id", got)
+	}
+}
+
+func TestJourneyRemoteNameFallsBackForImport(t *testing.T) {
+	state := journeyModel{
+		ID:         types.StringNull(),
+		RemoteName: types.StringNull(),
+		Name:       types.StringValue("Tree"),
+	}
+	if got := journeyRemoteName(state, "Prefix_"); got != "Prefix_Tree" {
+		t.Fatalf("got %q, want reconstructed import name", got)
+	}
+}
