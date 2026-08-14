@@ -36,7 +36,9 @@ unrecognised key.
 | `internal/resources/` | `script.go`, `journey.go`, `node.go` (one generic resource driven by each catalog `Spec`) |
 | `internal/nodetype/`  | **the catalog** — typed field specs for all 34 node types, plus encode/decode             |
 | `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts                                         |
+| `internal/amjson/`    | coercions for AM's loosely-typed JSON, shared by resources and generate                   |
 | `internal/prefix/`    | `resource_prefix` apply/strip helpers                                                     |
+| `internal/testutil/`  | test-only helpers (fake HTTP transport); imported from `_test.go` only                    |
 | `examples/`           | hand-written HCL showing the intended shape                                               |
 | `generated/`          | local experiment output — **gitignored**, not a source artefact                           |
 
@@ -114,7 +116,16 @@ make generate-cli
 ```
 
 Flags: `-realm` (default `alpha`), `-out`, `-prefix` (strip from existing
-names), `-journeys` (comma-separated; default all).
+names), `-journeys` (comma-separated; default all — errors if a requested name
+is not in the realm).
+
+`-out` is **owned** by the tool: each run deletes the previous run's
+`provider.tf`, `scripts.tf`, `journey_*.tf` and `scripts/*.js` so deleted
+journeys don't linger. It writes a `.pingoneaic-generated` marker to claim the
+directory and refuses to delete anything in a directory that lacks the marker
+but holds matching files — that guard is what stops `-out examples` eating
+hand-written config. Progress goes to `Options.Progress` (stderr from the CLI);
+`SIGINT`/`SIGTERM` cancel the run through the context.
 
 ## Conventions that bite if you miss them
 
@@ -123,6 +134,20 @@ the provider prepends `resource_prefix` (default `Terraform_`) on the wire, so
 applying generated config creates copies rather than clobbering the originals.
 `name` vs `remote_name` on `pingoneaic_script` / `pingoneaic_journey` is exactly
 this split. `internal/prefix` is idempotent — `Apply` won't double-prefix.
+
+**Changing `resource_prefix` does not rename existing resources.** It is
+provider-level config, so it never triggers `RequiresReplace`. AM keys trees by
+name and cannot rename, so a journey stays at the name recorded in state —
+`journeyRemoteName` resolves every CRUD path from the persisted id, and only a
+create falls back to `prefix.Apply`. Recomputing the name on update would PUT a
+second tree and orphan the first. Scripts are keyed by UUID, so for them a
+prefix change is a genuine rename in place.
+
+**Computed attributes with a `Default` must round-trip.** If AM omits the key,
+the decode path has to produce the same value the schema defaults to, or apply
+dies with "Provider produced inconsistent result after apply". `version` on a
+journey node is the worked example: `client.DefaultNodeVersion` backs both the
+schema default and the decode fallback so they cannot drift.
 
 **Connection sentinels.** `success` and `failure` in HCL map to AM's built-in
 static node UUIDs (`client.SuccessNodeID` / `FailureNodeID`). Encode and decode

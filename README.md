@@ -1,8 +1,9 @@
 # terraform-provider-pingone-aic
 
-An **experimental** Terraform provider for [PingOne Advanced Identity
-Cloud](https://docs.pingidentity.com/pingoneaic/). It manages AM scripts,
-authentication journeys, and the journey nodes those trees actually use.
+An **experimental** Terraform provider for
+[PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
+manages AM scripts, authentication journeys, and the journey nodes those trees
+actually use.
 
 This is not a JSON-passthrough wrapper around the AIC REST API. Every attribute
 is typed against a catalog we verified on a live tenant. When AIC adds, removes,
@@ -21,7 +22,7 @@ provider "pingoneaic" {
 }
 ```
 
-Terraform config always uses the *logical* name (`GetIP`). AIC sees
+Terraform config always uses the _logical_ name (`GetIP`). AIC sees
 `Terraform_GetIP`. Applying generated config therefore creates **copies**
 instead of overwriting the journeys you pulled. Set `resource_prefix = ""` to
 write names as given (for example after importing an existing tree).
@@ -31,28 +32,36 @@ not hardcoded UUIDs.
 
 ## Resources
 
-| Resource | AIC object |
-| --- | --- |
-| `pingoneaic_script` | AM `/scripts/{id}` |
-| `pingoneaic_scripted_decision_node` | `ScriptedDecisionNode` |
-| `pingoneaic_journey` | authentication tree |
-| `pingoneaic_<type>_node` | every other node type used by the generate catalog |
+| Resource                            | AIC object                                         |
+| ----------------------------------- | -------------------------------------------------- |
+| `pingoneaic_script`                 | AM `/scripts/{id}`                                 |
+| `pingoneaic_scripted_decision_node` | `ScriptedDecisionNode`                             |
+| `pingoneaic_journey`                | authentication tree                                |
+| `pingoneaic_<type>_node`            | every other node type used by the generate catalog |
 
 `success` and `failure` are valid connection targets (AM's built-in static
-nodes). `x` / `y` are optional visual chrome and are omitted from generated
-HCL.
+nodes). `x` / `y` are optional visual chrome and are omitted from generated HCL.
+
+`pingoneaic_journey` also carries the tree-level session settings
+`maximum_idle_time`, `maximum_session_time` and `tree_timeout` (optional; AM
+supplies them when unset), and each `node` block takes an optional `version`
+(defaults to `1.0`).
+
+Changing `resource_prefix` does **not** rename existing journeys — AM keys trees
+by name and cannot rename one, so a journey stays at the name recorded in state.
+Scripts are keyed by UUID and do get renamed in place.
 
 ## Authentication
 
 Either a pre-minted bearer or a service-account JWT:
 
-| Provider argument | Environment variable |
-| --- | --- |
-| `tenant_url` | `PINGONEAIC_TENANT_URL` |
-| `access_token` | `PINGONEAIC_ACCESS_TOKEN` |
+| Provider argument    | Environment variable            |
+| -------------------- | ------------------------------- |
+| `tenant_url`         | `PINGONEAIC_TENANT_URL`         |
+| `access_token`       | `PINGONEAIC_ACCESS_TOKEN`       |
 | `service_account_id` | `PINGONEAIC_SERVICE_ACCOUNT_ID` |
-| `jwk` | `PINGONEAIC_JWK` |
-| `resource_prefix` | `PINGONEAIC_RESOURCE_PREFIX` |
+| `jwk`                | `PINGONEAIC_JWK`                |
+| `resource_prefix`    | `PINGONEAIC_RESOURCE_PREFIX`    |
 
 `access_token` is the easy path when an `aic` agent is already unlocked
 (`aic whoami --token`). JWT minting is what you want in CI.
@@ -71,8 +80,19 @@ That writes:
 
 - `generated/provider.tf`
 - `generated/scripts.tf` + `generated/scripts/*.js`
-- `generated/journey_<name>.tf` — nodes + tree, defaults omitted, UUIDs
-  replaced with Terraform references
+- `generated/journey_<name>.tf` — nodes + tree, defaults omitted, UUIDs replaced
+  with Terraform references
+
+**`-out` is a regenerated directory, not just a write target.** Each run deletes
+the previous run's `provider.tf`, `scripts.tf`, `journey_*.tf` and
+`scripts/*.js`, so a journey removed in the tenant does not linger as a stale
+file. To make that safe it drops a `.pingoneaic-generated` marker and **refuses
+to touch a directory that has no marker but does hold matching files** — so
+pointing `-out` at hand-written config is an error, not a silent delete. Keep
+your own files somewhere else.
+
+`-journeys` fails if any name is not present in the realm, rather than silently
+generating a subset.
 
 Unknown node types or unmodelled fields abort generate. Add them to
 `internal/nodetype/catalog.go` (and a test) rather than punching a JSON hole.
@@ -98,11 +118,10 @@ terraform {
 }
 ```
 
-## What this experiment is *not*
+## What this experiment is _not_
 
-- A complete AIC provider. ESVs, OAuth2 clients, managed objects, IDM
-  endpoints, and secret mappings are out of scope until the journey/script
-  path is proven.
+- A complete AIC provider. ESVs, OAuth2 clients, managed objects, IDM endpoints,
+  and secret mappings are out of scope until the journey/script path is proven.
 - A dump of AIC's JSON. If a field is missing, that is a catalog gap, not an
   invitation to `jsonencode()`.
 
