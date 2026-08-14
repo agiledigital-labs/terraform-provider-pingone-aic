@@ -64,6 +64,22 @@ func TestCleanGeneratedFilesLeavesUnrelatedFiles(t *testing.T) {
 	}
 }
 
+func TestWriteTerraformFileFormatsHCL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "main.tf")
+	body := []byte("resource \"example\" \"test\" {\n  short = 1\n  longer_name = 2\n}\n")
+	if err := writeTerraformFile(path, body); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "resource \"example\" \"test\" {\n  short       = 1\n  longer_name = 2\n}\n"
+	if string(got) != want {
+		t.Fatalf("formatted HCL:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestDisplayConn(t *testing.T) {
 	if displayConn("70e691a5-1e33-4ac3-a356-e7b6d60d92e0") != "success" {
 		t.Fatal("success sentinel")

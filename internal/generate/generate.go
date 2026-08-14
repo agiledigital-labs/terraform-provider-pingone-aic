@@ -19,6 +19,7 @@ import (
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/nodetype"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/prefix"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
 type Options struct {
@@ -379,7 +380,7 @@ provider "pingoneaic" {
   # creates copies instead of overwriting the journeys we pulled.
 }
 `
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+	if err := writeTerraformFile(path, []byte(body)); err != nil {
 		return err
 	}
 	g.files = append(g.files, path)
@@ -425,7 +426,7 @@ func (g *gen) writeScripts() error {
 		b.WriteString("}\n\n")
 	}
 	path := filepath.Join(g.opt.OutDir, "scripts.tf")
-	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+	if err := writeTerraformFile(path, []byte(b.String())); err != nil {
 		return err
 	}
 	g.files = append(g.files, path)
@@ -520,12 +521,16 @@ func (g *gen) writeJourneys() error {
 		b.WriteString("}\n")
 
 		path := filepath.Join(g.opt.OutDir, "journey_"+sanitizeIdent(j.Name)+".tf")
-		if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		if err := writeTerraformFile(path, []byte(b.String())); err != nil {
 			return err
 		}
 		g.files = append(g.files, path)
 	}
 	return nil
+}
+
+func writeTerraformFile(path string, body []byte) error {
+	return os.WriteFile(path, hclwrite.Format(body), 0o644)
 }
 
 func (g *gen) writeNode(b *strings.Builder, n emittedNode) {
