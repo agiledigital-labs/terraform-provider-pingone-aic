@@ -1,0 +1,5 @@
+{
+  "_id": "endpoint/gettasksview",
+  "file": "workflow/gettasksview.js",
+  "type": "text/javascript"
+}

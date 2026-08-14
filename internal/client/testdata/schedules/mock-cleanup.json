@@ -1,0 +1,15 @@
+{
+  "_id": "schedule/mock-cleanup",
+  "enabled": true,
+  "invokeContext": {
+    "script": {
+      "source": "/* fixture source truncated */",
+      "type": "text/javascript"
+    }
+  },
+  "invokeService": "script",
+  "misfirePolicy": "fireAndProceed",
+  "persisted": true,
+  "schedule": "0 0 3 * * ?",
+  "type": "cron"
+}

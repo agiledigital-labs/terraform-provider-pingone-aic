@@ -1,0 +1,40 @@
+{
+  "_id": "schedule/sunsetTask",
+  "concurrentExecution": false,
+  "enabled": true,
+  "endTime": null,
+  "invokeContext": {
+    "numberOfThreads": 1,
+    "scan": {
+      "_queryFilter": "/userName eq \"test.test\"",
+      "object": "managed/alpha_user",
+      "recovery": {
+        "timeout": "10m"
+      },
+      "taskState": {
+        "completed": "/custom_two/task-completed",
+        "started": "/custom_two/task-started"
+      }
+    },
+    "task": {
+      "script": {
+        "source": "var patch = [{ \"operation\" : \"replace\", \"field\" : \"/stateProvince\", \"value\" : \"ACT\" }];\n\nopenidm.patch(objectID, null, patch);\n\ntrue;",
+        "type": "text/javascript"
+      }
+    },
+    "waitForCompletion": false
+  },
+  "invokeLogLevel": "info",
+  "invokeService": "taskscanner",
+  "isCron": false,
+  "managedObject": "alpha_user",
+  "misfirePolicy": "fireAndProceed",
+  "persisted": true,
+  "recoverable": false,
+  "repeatCount": null,
+  "repeatInterval": null,
+  "schedule": "0 0 * * * ?",
+  "scriptProperty": "custom_two",
+  "startTime": null,
+  "type": "simple"
+}

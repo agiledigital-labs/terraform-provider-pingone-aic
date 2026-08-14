@@ -1,0 +1,14 @@
+{
+  "_id": "endpoint/user-token-poc",
+  "description": "POC: tenant bearer validation plus IDM role authorization",
+  "globals": {
+    "endpointConfig": {
+      "allowedRoles": [
+        "internal/role/openidm-authorized",
+        "internal/role/openidm-admin"
+      ]
+    }
+  },
+  "source": "/* fixture source truncated */",
+  "type": "text/javascript"
+}

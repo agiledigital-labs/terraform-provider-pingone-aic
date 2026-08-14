@@ -1,0 +1,23 @@
+{
+  "_id": "schedule/UpdateReviewList",
+  "concurrentExecution": false,
+  "enabled": true,
+  "endTime": null,
+  "invokeContext": {
+    "script": {
+      "globals": {},
+      "source": "/* fixture source truncated */",
+      "type": "text/javascript"
+    }
+  },
+  "invokeLogLevel": "info",
+  "invokeService": "script",
+  "misfirePolicy": "fireAndProceed",
+  "persisted": true,
+  "recoverable": false,
+  "repeatCount": 0,
+  "repeatInterval": 0,
+  "schedule": "0 0 0 * * ?",
+  "startTime": null,
+  "type": "cron"
+}

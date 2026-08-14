@@ -1,0 +1,8 @@
+{
+  "_id": "endpoint/ssp-csr-customer",
+  "context": "endpoint/ssp-csr-customer",
+  "description": "GET - checks the status of a user (account lockout)\nPOST - update attributes of the user - portalStatus",
+  "globalsObject": "\"  {\\n    \\\"request\\\": {\\n      \\\"method\\\": \\\"create\\\"\\n    }\\n  }\"",
+  "source": "/* fixture source truncated */",
+  "type": "text/javascript"
+}

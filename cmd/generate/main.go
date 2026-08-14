@@ -72,6 +72,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "generate:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("wrote %d journeys, %d scripts, %d nodes, %d oauth2 clients, %d variables, %d secrets, %d managed objects → %s\n",
-		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, res.ManagedObjects, *out)
+	fmt.Printf("wrote %d journeys, %d scripts, %d nodes, %d oauth2 clients, %d variables, %d secrets, %d managed objects, %d endpoints, %d schedules → %s\n",
+		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, res.ManagedObjects, res.Endpoints, res.Schedules, *out)
 }

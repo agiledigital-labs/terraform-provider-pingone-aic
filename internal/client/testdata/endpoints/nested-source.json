@@ -1,0 +1,8 @@
+{
+  "_id": "endpoint/nested",
+  "type": "text/javascript",
+  "source": {
+    "type": "text/javascript",
+    "source": "return {};"
+  }
+}

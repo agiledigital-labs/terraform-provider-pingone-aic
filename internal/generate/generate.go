@@ -40,6 +40,8 @@ type Result struct {
 	Variables      int
 	Secrets        int
 	ManagedObjects int
+	Endpoints      int
+	Schedules      int
 	Files          []string
 }
 
@@ -110,14 +112,18 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 	if err := g.ingestManaged(ctx); err != nil {
 		return nil, err
 	}
+	progressf(opt, "Listing IDM endpoints and schedules")
+	if err := g.ingestIDM(ctx); err != nil {
+		return nil, err
+	}
 
 	res := &Result{
 		Journeys: len(g.journeys), Scripts: len(g.scripts), Nodes: len(g.nodes),
 		OAuth2Clients: len(g.oauth2), Variables: len(g.variables), Secrets: len(g.secrets),
-		ManagedObjects: len(g.managed),
+		ManagedObjects: len(g.managed), Endpoints: len(g.endpoints), Schedules: len(g.schedules),
 	}
-	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), %d oauth2 client(s), %d variable(s), %d secret(s), %d managed object(s) to %s",
-		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, res.ManagedObjects, opt.OutDir)
+	progressf(opt, "Writing %d journey(s), %d script(s), %d node(s), %d oauth2 client(s), %d variable(s), %d secret(s), %d managed object(s), %d endpoint(s), %d schedule(s) to %s",
+		res.Journeys, res.Scripts, res.Nodes, res.OAuth2Clients, res.Variables, res.Secrets, res.ManagedObjects, res.Endpoints, res.Schedules, opt.OutDir)
 	if err := cleanGeneratedFiles(opt.OutDir); err != nil {
 		return nil, err
 	}
@@ -141,6 +147,9 @@ func Run(ctx context.Context, c *client.Client, opt Options) (*Result, error) {
 		return nil, err
 	}
 	if err := g.writeManaged(); err != nil {
+		return nil, err
+	}
+	if err := g.writeIDM(); err != nil {
 		return nil, err
 	}
 	res.Files = g.files
@@ -196,10 +205,14 @@ func generatedPaths(outDir string) ([]string, error) {
 		filepath.Join(outDir, "esv_variables.tf"),
 		filepath.Join(outDir, "esv_secrets.tf"),
 		filepath.Join(outDir, "managed_objects.tf"),
+		filepath.Join(outDir, "idm_endpoints.tf"),
+		filepath.Join(outDir, "idm_schedules.tf"),
 	}
 	for _, pattern := range []string{
 		filepath.Join(outDir, "journey_*.tf"),
 		filepath.Join(outDir, "scripts", "*.js"),
+		filepath.Join(outDir, "endpoints", "*.js"),
+		filepath.Join(outDir, "schedules", "*.js"),
 	} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
@@ -280,6 +293,8 @@ type gen struct {
 	variables    []emittedVariable
 	secrets      []emittedSecret
 	managed      []emittedManaged
+	endpoints    []emittedEndpoint
+	schedules    []emittedSchedule
 }
 
 type emittedNode struct {

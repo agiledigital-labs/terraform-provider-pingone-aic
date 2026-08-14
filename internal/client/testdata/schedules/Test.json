@@ -1,0 +1,37 @@
+{
+  "_id": "schedule/Test",
+  "concurrentExecution": false,
+  "enabled": true,
+  "endTime": null,
+  "invokeContext": {
+    "numberOfThreads": 5,
+    "scan": {
+      "_queryFilter": "/userName eq \"david.balmain\"",
+      "object": "managed/alpha_user",
+      "taskState": {
+        "completed": "/custom_job/task-completed",
+        "started": "/custom_job/task-started"
+      }
+    },
+    "task": {
+      "script": {
+        "globals": {},
+        "source": "var patch = [{ \"operation\" : \"replace\", \"field\" : \"/postalCode\", \"value\" : \"2000\" }];\nlogger.debug(\"Performing Task on {} ({})\", input.mail, objectID);\nopenidm.patch(objectID, null, patch);\ntrue;",
+        "type": "text/javascript"
+      }
+    },
+    "waitForCompletion": false
+  },
+  "invokeLogLevel": "info",
+  "invokeService": "taskscanner",
+  "managedObject": "alpha_user",
+  "misfirePolicy": "fireAndProceed",
+  "persisted": false,
+  "recoverable": false,
+  "repeatCount": -1,
+  "repeatInterval": 60000,
+  "schedule": null,
+  "scriptProperty": "custom_job",
+  "startTime": null,
+  "type": "simple"
+}

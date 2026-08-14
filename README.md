@@ -3,8 +3,8 @@
 An **experimental** Terraform provider for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey nodes those trees
-actually use, OAuth2 clients, ESVs (variables and secrets), and custom
-managed-object types.
+actually use, OAuth2 clients, ESVs, custom managed-object types, and IDM
+endpoints and schedules.
 
 This is not a JSON-passthrough wrapper around the AIC REST API. Every attribute
 is typed against a catalog we verified on a live tenant. When AIC adds, removes,
@@ -44,6 +44,8 @@ not hardcoded UUIDs.
 | `pingoneaic_esv_variable`           | `/environment/variables/{id}`                      |
 | `pingoneaic_esv_secret`             | `/environment/secrets/{id}`                        |
 | `pingoneaic_managed_object`         | one type in `/openidm/config/managed`              |
+| `pingoneaic_idm_endpoint`           | `/openidm/config/endpoint/{name}`                  |
+| `pingoneaic_idm_schedule`           | `/openidm/config/schedule/{name}`                  |
 | `pingoneaic_<type>_node`            | every other node type used by the generate catalog |
 
 `success` and `failure` are valid connection targets (AM's built-in static
@@ -89,13 +91,18 @@ That writes:
 - `generated/provider.tf`
 - `generated/scripts.tf` + `generated/scripts/*.js`
 - `generated/oauth2_clients.tf` — one resource per OAuth2 client, defaults omitted
+- `generated/esv_variables.tf` / `generated/esv_secrets.tf`
+- `generated/managed_objects.tf` — custom types only
+- `generated/idm_endpoints.tf` + `generated/endpoints/*.js`
+- `generated/idm_schedules.tf` + `generated/schedules/*.js`
 - `generated/journey_<name>.tf` — nodes + tree, defaults omitted, UUIDs replaced
   with Terraform references
 
 **`-out` is a regenerated directory, not just a write target.** Each run deletes
 the previous run's `provider.tf`, `scripts.tf`, `oauth2_clients.tf`,
-`journey_*.tf` and `scripts/*.js`, so a journey or client removed in the tenant
-does not linger as a stale file. To make that safe it drops a `.pingoneaic-generated` marker and **refuses
+`esv_*.tf`, `managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`,
+`journey_*.tf`, `scripts/*.js`, `endpoints/*.js` and `schedules/*.js`, so an
+object removed in the tenant does not linger as a stale file. To make that safe it drops a `.pingoneaic-generated` marker and **refuses
 to touch a directory that has no marker but does hold matching files** — so
 pointing `-out` at hand-written config is an error, not a silent delete. Keep
 your own files somewhere else.
@@ -129,9 +136,10 @@ terraform {
 
 ## What this experiment is _not_
 
-- A complete AIC provider. SAML, managed objects, IDM endpoints, and
-  secret mappings are out of scope until the journey/script/OAuth2/ESV path is
-  proven. ESV writes never restart the tenant.
+- A complete AIC provider. SAML, secret mappings, the realm-wide OIDC
+  provider, Ping-shipped managed objects (`alpha_user`, …), and managed-object
+  lifecycle hooks are out of scope until that path is proven. ESV writes never
+  restart the tenant. Schedule copies default to `enabled = false`.
 - A dump of AIC's JSON. If a field is missing, that is a catalog gap, not an
   invitation to `jsonencode()`.
 

@@ -1,0 +1,7 @@
+{
+  "_id": "endpoint/idr",
+  "description": "Shared Identity Resolution implementation for AM and IDM scripts.",
+  "globalsObject": {},
+  "source": "/* fixture source truncated */",
+  "type": "text/javascript"
+}

@@ -12,8 +12,9 @@ Canonical instructions for all AI agents working in this repo. `CLAUDE.md` and
 An **experimental** Terraform provider (terraform-plugin-framework, Go 1.25) for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey node types those trees
-use, and OAuth2 clients. User-facing overview lives in [README.md](../README.md)
-— don't duplicate it here.
+use, OAuth2 clients, ESVs, custom managed-object types, and IDM endpoints and
+schedules. User-facing overview lives in [README.md](../README.md) — don't
+duplicate it here.
 
 ## The one rule that shapes everything
 
@@ -31,13 +32,13 @@ unrecognised key.
 | Path                  | What lives there                                                                          |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `main.go`             | provider plugin entrypoint (`registry.terraform.io/agiledigital-labs/pingone-aic`)        |
-| `cmd/generate/`       | `pingoneaic-tf` CLI — pulls live journeys and OAuth2 clients into reviewable HCL          |
+| `cmd/generate/`       | `pingoneaic-tf` CLI — pulls live tenant config into reviewable HCL                        |
 | `internal/provider/`  | provider schema, config resolution, resource registration                                 |
-| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go` (one generic node resource driven by each catalog `Spec`) |
+| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go`, `idm_endpoint.go`, `idm_schedule.go` (node resources are one generic type driven by each catalog `Spec`) |
 | `internal/nodetype/`  | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                |
 | `internal/oauth2client/` | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                             |
 | `internal/managedobject/` | typed decode/encode for one custom managed-object type (relationships remapped)                              |
-| `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients, ESVs                                           |
+| `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients, ESVs, IDM config                               |
 | `internal/amjson/`    | coercions for AM's loosely-typed JSON, shared by resources and generate                   |
 | `internal/prefix/`    | `resource_prefix` apply/strip helpers                                                     |
 | `internal/testutil/`  | test-only helpers (fake HTTP transport); imported from `_test.go` only                    |
@@ -138,8 +139,10 @@ names), `-journeys` (comma-separated; default all — errors if a requested name
 is not in the realm).
 
 `-out` is **owned** by the tool: each run deletes the previous run's
-`provider.tf`, `scripts.tf`, `oauth2_clients.tf`, `journey_*.tf` and
-`scripts/*.js` so deleted objects don't linger. It writes a `.pingoneaic-generated` marker to claim the
+`provider.tf`, `scripts.tf`, `oauth2_clients.tf`, `esv_*.tf`,
+`managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`, `journey_*.tf`,
+`scripts/*.js`, `endpoints/*.js` and `schedules/*.js` so deleted objects don't
+linger. It writes a `.pingoneaic-generated` marker to claim the
 directory and refuses to delete anything in a directory that lacks the marker
 but holds matching files — that guard is what stops `-out examples` eating
 hand-written config. Progress goes to `Options.Progress` (stderr from the CLI);
@@ -238,14 +241,18 @@ Most relevant here:
 | `00-auth.md`                      | service-account JWT bearer grant, token caching |
 | `01-realms-and-paths.md`          | realm path composition                          |
 | `02-headers-and-versioning.md`    | `Accept-API-Version` cheat sheet                |
+| `03-esvs.md`                      | ESV ids, restart, `_pageSize` max 100           |
 | `04-scripts.md`                   | script contexts, base64 body, no `_rev`         |
 | `05-oauth2-oidc.md`               | OAuth2 clients, inherited wrappers, `*-encrypted` strip, protocol=2.1 |
 | `09-journeys.md`                  | auth trees, nodes, custom nodes                 |
+| `10-managed-objects.md`           | `config/managed` whole-doc RMW, Q14 lost updates |
+| `11-idm-endpoints.md`             | IDM endpoints + schedules; no Accept-API-Version |
 | `13-script-contexts.md`           | authoritative per-context binding metadata      |
 | `99-quirks-and-open-questions.md` | cross-cutting weirdness worth a skim            |
 
-The rest of the set (ESVs, SAML, IDM, sync mappings, …) covers areas that are
-[out of scope](#scope) for this provider — useful background, not current work.
+The rest of the set (SAML, secret mappings, sync mappings, …) covers areas that
+are [out of scope](#scope) for this provider — useful background, not current
+work.
 
 [manager]: https://github.com/agiledigital-labs/pingone-aic-manager
 
@@ -298,9 +305,13 @@ shapes from memory.
 ## Scope
 
 In scope: scripts, journeys, journey nodes, OAuth2 clients, ESVs (variables and
-secrets), custom managed-object types. Explicitly **out** of scope until that
-path is proven: SAML, IDM endpoints, secret mappings, the realm-wide OIDC
-provider service, Ping-shipped managed objects (`alpha_user`, …).
+secrets), custom managed-object types, IDM endpoints and schedules. Explicitly
+**out** of scope until that path is proven: SAML, secret mappings, the
+realm-wide OIDC provider service, Ping-shipped managed objects (`alpha_user`,
+…), managed-object lifecycle hooks.
+
+IDM config (`/openidm/config/…`) must **not** send `Accept-API-Version`.
+Schedule copies default to `enabled = false` so they cannot fire.
 
 **Managed config writes are not read-your-writes.** `ReplaceManagedConfirmed`
 re-reads until the new type is visible. Never PUT a document that was not

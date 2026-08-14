@@ -1,0 +1,23 @@
+{
+  "_id": "schedule/load-idr-name-variants",
+  "concurrentExecution": false,
+  "enabled": true,
+  "endTime": null,
+  "invokeContext": {
+    "script": {
+      "source": "/* fixture source truncated */",
+      "type": "text/javascript"
+    },
+    "type": "text/javascript"
+  },
+  "invokeLogLevel": "info",
+  "invokeService": "org.forgerock.openidm.script",
+  "misfirePolicy": "fireAndProceed",
+  "persisted": true,
+  "recoverable": false,
+  "repeatCount": 0,
+  "repeatInterval": 0,
+  "schedule": "0 0 3 1 1 ? 2099",
+  "startTime": null,
+  "type": "cron"
+}
