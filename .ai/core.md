@@ -46,6 +46,18 @@ type is a catalog edit, not a new file.
 
 ## Commands
 
+The toolchain is pinned by `flake.nix` + `flake.lock` (Go, Terraform, GNU Make,
+gopls). Work inside it so everyone gets the same versions:
+
+```sh
+nix develop                      # interactive shell
+nix develop --command make test  # one-off
+```
+
+Everything below assumes that shell. It is not mandatory — a system Go that
+satisfies `go.mod` works fine — but version-skew bugs are yours to diagnose if
+you skip it.
+
 ```sh
 make test          # go test ./...
 make build         # -> bin/terraform-provider-pingone-aic
@@ -58,6 +70,12 @@ make tidy          # go mod tidy
 Gates before calling work done: `go test ./...`, `go build ./...`, `gofmt -l .`
 (must be empty), `go vet ./...`. CI (`.github/workflows/test.yml`) runs the
 tests plus both builds on push to `main` and on PRs.
+
+Bumping the toolchain is `nix flake update` — commit the resulting `flake.lock`
+on its own, so a version bump is never buried inside a behavioural change. Note
+that nixpkgs' `terraform` is unfree (BUSL-1.1), so it is absent from the public
+binary cache and compiles from source on a cold machine; `flake.nix` allows that
+one package by name rather than blanket-allowing unfree.
 
 Pulling live config:
 

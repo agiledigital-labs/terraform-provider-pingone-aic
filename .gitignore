@@ -1,3 +1,7 @@
+# Nix build symlinks (flake.nix / flake.lock ARE committed)
+/result
+/result-*
+
 # Binaries
 /terraform-provider-pingone-aic
 /pingoneaic-tf
