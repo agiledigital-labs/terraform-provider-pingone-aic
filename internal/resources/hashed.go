@@ -91,11 +91,6 @@ func (r *hashedRuleResource[Model, Rule]) Create(ctx context.Context, req resour
 }
 
 func (r *hashedRuleResource[Model, Rule]) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state Model
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 	id, err := modelID(ctx, req.State)
 	if err != nil {
 		resp.Diagnostics.AddError("Read "+r.spec.label, err.Error())

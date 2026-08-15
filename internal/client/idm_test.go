@@ -66,6 +66,15 @@ func TestIDMFixtureDecodeEncodePreservesRecursiveKeySet(t *testing.T) {
 	}
 }
 
+// recursiveKeySet flattens every key path in a document so decode → encode can
+// be compared for key-set equality: a key the decoder cannot carry is deleted
+// from the tenant on the next apply, which is exactly the class of silent
+// passthrough this provider exists to prevent.
+//
+// response marks the side that came off the wire, and only that side drops the
+// three keys a request legitimately never carries: `_id` and `_rev` are server
+// metadata, and `temporalConstraints` is stripped deliberately because IDM
+// rejects it on write (see .ai/core.md). Every other difference is a finding.
 func recursiveKeySet(v any, response bool) []string {
 	var keys []string
 	var walk func(any, string)
