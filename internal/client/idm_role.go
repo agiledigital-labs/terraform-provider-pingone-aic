@@ -31,12 +31,13 @@ var accessFlagKeys = map[string]struct{}{
 // Role is one /openidm/internal/role/{id}. _id is chosen on create
 // (PUT /{id}); the admin console's POST path yields a random UUID instead.
 type Role struct {
-	ID          string
-	Rev         string
-	Name        string
-	Description string
-	Condition   string
-	Privileges  []Privilege
+	ID               string
+	Rev              string
+	Name             string
+	Description      string
+	Condition        string
+	Privileges       []Privilege
+	conditionPresent bool
 }
 
 type Privilege struct {
@@ -60,12 +61,19 @@ func DecodeRole(raw map[string]any) (*Role, error) {
 	if err := rejectNonEmptyTemporal(raw["temporalConstraints"]); err != nil {
 		return nil, err
 	}
-	id, _ := raw["_id"].(string)
+	id, err := strictString(raw, "_id")
+	if err != nil {
+		return nil, err
+	}
 	r := &Role{
-		ID:          id,
-		Rev:         stringVal(raw, "_rev"),
-		Name:        stringVal(raw, "name"),
-		Description: stringVal(raw, "description"),
+		ID:               id,
+		conditionPresent: hasKey(raw, "condition"),
+	}
+	for key, dst := range map[string]*string{"_rev": &r.Rev, "name": &r.Name, "description": &r.Description} {
+		*dst, err = strictString(raw, key)
+		if err != nil {
+			return nil, err
+		}
 	}
 	cond, err := optionalStringField(raw, "condition")
 	if err != nil {
@@ -109,9 +117,15 @@ func decodePrivilege(raw map[string]any) (Privilege, error) {
 	if err := rejectUnknown("role privilege", raw, privilegeKeys); err != nil {
 		return Privilege{}, err
 	}
-	p := Privilege{
-		Name: stringVal(raw, "name"),
-		Path: stringVal(raw, "path"),
+	p := Privilege{}
+	var err error
+	p.Name, err = strictString(raw, "name")
+	if err != nil {
+		return Privilege{}, err
+	}
+	p.Path, err = strictString(raw, "path")
+	if err != nil {
+		return Privilege{}, err
 	}
 	if _, ok := raw["actions"]; !ok {
 		return Privilege{}, fmt.Errorf("actions is required")
@@ -119,7 +133,6 @@ func decodePrivilege(raw map[string]any) (Privilege, error) {
 	if _, ok := raw["permissions"]; !ok {
 		return Privilege{}, fmt.Errorf("permissions is required")
 	}
-	var err error
 	if p.Actions, err = requireStringSlice(raw, "actions"); err != nil {
 		return Privilege{}, err
 	}
@@ -160,13 +173,19 @@ func decodeAccessFlags(v any) ([]AccessFlag, error) {
 		if err := rejectUnknown("accessFlag", o, accessFlagKeys); err != nil {
 			return nil, err
 		}
-		attr := stringVal(o, "attribute")
+		attr, err := strictString(o, "attribute")
+		if err != nil {
+			return nil, fmt.Errorf("accessFlags[%d]: %w", i, err)
+		}
 		if attr == "" {
 			return nil, fmt.Errorf("accessFlags[%d] attribute cannot be empty", i)
 		}
-		ro, ok := boolVal(o, "readOnly")
+		ro, ok, err := strictBool(o, "readOnly")
+		if err != nil {
+			return nil, fmt.Errorf("accessFlags[%d]: %w", i, err)
+		}
 		if !ok {
-			return nil, fmt.Errorf("accessFlags[%d] readOnly must be a boolean", i)
+			return nil, fmt.Errorf("accessFlags[%d] readOnly is required", i)
 		}
 		out = append(out, AccessFlag{Attribute: attr, ReadOnly: ro})
 	}
@@ -209,8 +228,15 @@ func EncodeRole(r Role) (map[string]any, error) {
 	}
 	if r.Condition != "" {
 		body["condition"] = r.Condition
+	} else if r.conditionPresent {
+		body["condition"] = nil
 	}
 	return body, nil
+}
+
+func hasKey(raw map[string]any, key string) bool {
+	_, ok := raw[key]
+	return ok
 }
 
 func encodePrivilege(p Privilege) (map[string]any, error) {
