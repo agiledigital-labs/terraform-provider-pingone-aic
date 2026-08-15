@@ -34,9 +34,17 @@ func TestSetAndRemoveManagedObjectPreserveSiblings(t *testing.T) {
 }
 
 func TestConfirmManaged(t *testing.T) {
-	doc := map[string]any{"objects": []any{map[string]any{"name": "x"}}}
+	content := map[string]any{"name": "x", "schema": map[string]any{"title": "new"}}
+	doc := map[string]any{"objects": []any{content}}
 	if err := confirmManaged(doc, []ManagedConfirm{{Name: "x"}}); err != nil {
 		t.Fatal(err)
+	}
+	if err := confirmManaged(doc, []ManagedConfirm{{Name: "x", Content: content}}); err != nil {
+		t.Fatal(err)
+	}
+	stale := map[string]any{"name": "x", "schema": map[string]any{"title": "old"}}
+	if err := confirmManaged(doc, []ManagedConfirm{{Name: "x", Content: stale}}); err == nil {
+		t.Fatal("expected stale content failure")
 	}
 	if err := confirmManaged(doc, []ManagedConfirm{{Name: "x", Absent: true}}); err == nil {
 		t.Fatal("expected absent failure")

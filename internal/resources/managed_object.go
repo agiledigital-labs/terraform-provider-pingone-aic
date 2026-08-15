@@ -250,7 +250,7 @@ func (r *managedObjectResource) write(ctx context.Context, remote string, plan m
 		if err != nil {
 			return nil, nil, err
 		}
-		return next, []client.ManagedConfirm{{Name: remote}}, nil
+		return next, []client.ManagedConfirm{{Name: remote, Content: obj}}, nil
 	})
 }
 

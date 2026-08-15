@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"time"
 )
 
@@ -12,8 +13,9 @@ const managedConfigPath = "/openidm/config/managed"
 // ManagedConfirm says what a config/managed write must observe before
 // it is believed. A 200 on PUT is not evidence the change is stored.
 type ManagedConfirm struct {
-	Name   string
-	Absent bool
+	Name    string
+	Content map[string]any
+	Absent  bool
 }
 
 func (c *Client) GetManaged(ctx context.Context) (map[string]any, error) {
@@ -100,21 +102,19 @@ func (c *Client) replaceManagedConfirmedLocked(ctx context.Context, doc map[stri
 }
 
 func confirmManaged(doc map[string]any, expect []ManagedConfirm) error {
-	objs, _ := doc["objects"].([]any)
-	names := map[string]bool{}
-	for _, raw := range objs {
-		o, _ := raw.(map[string]any)
-		if n, _ := o["name"].(string); n != "" {
-			names[n] = true
-		}
-	}
 	for _, e := range expect {
-		has := names[e.Name]
+		got, has, err := FindManagedObject(doc, e.Name)
+		if err != nil {
+			return err
+		}
 		if e.Absent && has {
 			return fmt.Errorf("expected managed object %q to be absent", e.Name)
 		}
 		if !e.Absent && !has {
 			return fmt.Errorf("expected managed object %q to be present", e.Name)
+		}
+		if !e.Absent && e.Content != nil && !reflect.DeepEqual(got, e.Content) {
+			return fmt.Errorf("expected managed object %q to have the requested content", e.Name)
 		}
 	}
 	return nil
