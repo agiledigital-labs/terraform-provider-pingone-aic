@@ -14,20 +14,33 @@ findings). Each should name the guard that will eventually retire it.
   AM key is absent, Terraform aborts with "Provider produced inconsistent result
   after apply". Check the missing-key case, not just the present-key case.
   _Guard: `TestTreeToModelDefaultsNodeVersionWhenAMOmitsIt` covers node
-  `version`. Script `evaluator_version` was checked against the tenant and is
-  not affected — see Verified against._
+  `version`; `TestDecodeScheduleDefaultsPersisted` covers schedule `persisted`
+  via `DefaultSchedulePersisted`. Script `evaluator_version` was checked against
+  the tenant and is not affected — see Verified against._
+- **And the mirror image: a bare `Optional` attribute must be written back
+  exactly as planned.** `Optional` without `Computed` means state must equal
+  plan, so substituting a remembered value when the plan is null — or collapsing
+  null and `""` into each other in a `*ToModel` helper — produces the same
+  inconsistent-result abort from the other direction. Write-only values the API
+  never returns (`esv_secret.value`) want
+  `Optional + Computed + UseStateForUnknown`, not bare `Optional`. _Guard:
+  `TestSecretToModelPreservesPlannedValueExactly`. Take `types.String`, not
+  `string`, in any `*ToModel` that carries an optional attribute — the `string`
+  signature is what made the collapse invisible._
 - **Know what a resource is keyed by before reasoning about renames.**
   `resource_prefix` is provider-level, so changing it never triggers
   `RequiresReplace`. Name-keyed resources (journeys/trees, OAuth2 clients) must
   resolve every CRUD path from the persisted id or an update orphans the
   original; UUID-keyed resources (scripts) rename in place and are fine. _Guard:
-  `TestJourneyWriteTargetsPersistedTreeAfterPrefixChange` and
-  `TestOAuth2RemoteNamePersistsAcrossPrefixChange`. Add the equivalent for any
-  new name-keyed resource._ **The test must drive `Update` through a fake
-  transport, not call the resolver helper.** The 2026-08-14 entry below is the
-  whole reason: the bug was `write()` ignoring the helper, and a helper-level
-  test cannot see that. Every resource added on 2026-08-15 has only the
-  helper-level version.
+  `TestWriteTargetsPersistedNameAfterPrefixChange` — one table over all eight
+  name-keyed resources, create and update. Add a row for any new one._ **The
+  test must drive the write path through a fake transport and assert the request
+  path, not call the resolver helper.** The 2026-08-14 entry below is the whole
+  reason: the bug was `write()` ignoring the helper, and a helper-level test
+  cannot see that. The helper-level tests are gone; adding one back is a
+  regression. The rule itself lives once, in `remoteName`
+  (`internal/resources/remote.go`) — a second copy of that loop is the other
+  half of this check.
 - **Fail-closed validators must be reachable from one entry point.** This repo's
   core rule (unknown key = error) only holds if every caller runs every
   validator. Two validators that must be called as a pair are a latent
@@ -37,13 +50,40 @@ findings). Each should name the guard that will eventually retire it.
   Guarding the top-level body and stopping one level short is the same
   passthrough hole, only harder to see: the decoder reads the two keys it knows
   and the re-encode silently deletes the rest. Count the `asObject(...)` calls
-  in a decoder and check each has a matching key set. _Guard: none yet — the
-  proposed one is a `Decode → Encode → Decode` + key-set equality sweep over
-  `testdata/`, which fails on any key the decoder cannot carry. Not applied;
-  `schedule.invokeContext[.task].script.globals` is live and dropped today._
+  in a decoder and check each has a matching key set. _Guard: applied.
+  `TestIDMFixtureDecodeEncodePreservesRecursiveKeySet` runs `Decode → Encode`
+  over every fixture under `testdata/{endpoints,schedules,roles}` and compares
+  the full recursive key path set, so any key the model cannot carry fails the
+  build. Adding a fixture directory is one table row. The permissive
+  `stringVal`/`boolVal`/`intVal` accessors were deleted at the same time in
+  favour of erroring `strictString`/`strictBool`/`strictInt`/`strictObject` — a
+  wrong-typed value must fail, not decode to a confident zero._
 - **Destructive filesystem work needs a marker, not just a matching name.**
   Anything that deletes under a user-supplied path must prove the directory is
   ours first. _Guard: `TestCleanGeneratedFilesRefusesUnmarkedDirectory`._
+- **Anything that emits a document in another language needs an escaping
+  round-trip property, not examples.** `generate` writes HCL containing tenant
+  text — JS expressions, query filters, ESV values — and `${`/`%{` are
+  interpolation and directive sigils there. Hand-picked cases cannot cover the
+  input space. _Guard: `FuzzHclStringRoundTrip` asserts that parsing
+  `x = hclString(s)` evaluates back to `s`. Note `strconv.Quote` is **not** the
+  right primitive: it emits `\xHH`/`\a`/`\b`/`\v`, which HCL rejects.
+  `hclwrite.TokensForValue` is. `hclFile` is the deliberate exception that emits
+  a real `${path.module}`._
+- **One list, one definition — especially when the second copy is prose.**
+  `generatedPaths` and the `.pingoneaic-generated` marker text both enumerate
+  what a run deletes; the marker copy had already gone stale on three entries
+  before anyone noticed, because nothing compares prose to code. _Guard:
+  `generatedOutputs` is the single table both read, plus a test asserting every
+  path the writers record is matched by `generatedPaths`. The remaining copies
+  in `README.md` and `.ai/core.md` are still hand-maintained._
+- **A gate that nothing runs is not a gate.** `gofmt`/`vet`/`build`/`test`/
+  `lint` all pass with a directly imported module still marked `// indirect`;
+  `make tidy` existed but was in no hook and no workflow, so it never ran. This
+  cost a follow-up commit once (`go-cty`, 2026-08-15). When reviewing, check the
+  `Makefile` against `.githooks/` and `.github/workflows/` — a target with no
+  caller is a gap. _Guard: applied. `go mod tidy` + `git diff --quiet go.mod
+  go.sum` now run in `.githooks/pre-push` and `.github/workflows/test.yml`._
 - **Fail-closed allowlists must be validated against a live tenant sweep, not
   hand-written fixtures.** Fetch every object of the type and run the real
   bodies through the validator; a shape you did not think of is exactly what the
@@ -81,12 +121,50 @@ findings). Each should name the guard that will eventually retire it.
   `globals.endpointConfig` — the author knew the shape mattered.
   `TestDecodeAllLiveScheduleFixtures` passes because it only asserts that decode
   succeeds and `Name`/`InvokeService` are non-empty.
-- **Guard:** proposed, not applied. Add `scheduleScriptKeys` (`source`, `type`,
-  `globals`) + `taskStateKeys` + `recoveryKeys`, carry `Globals` on
-  `client.Schedule`, and replace the per-kind decode sweeps with one
-  table-driven `Decode → Encode → Decode` round-trip over `testdata/` that also
-  compares key sets — it fails on any live key the model cannot carry, for every
-  kind at once. Promoted to Standing check 3b.
+- **Guard:** applied. Every nested schedule object now has its own key set,
+  `Globals` is carried on `client.Schedule` and surfaced as a `map(string)`
+  Terraform attribute, and the three per-kind decode sweeps collapsed into
+  `TestIDMFixtureDecodeEncodePreservesRecursiveKeySet` — one table comparing the
+  full recursive key path set of `Decode → Encode` against the fixture, for
+  endpoints, schedules and roles at once. Promoted to a Standing check.
+- **Found while fixing:** the `globals` in all three fixtures is `{}`, so the
+  live loss was an empty key rather than user data — the hole is real, the blast
+  radius smaller than the first reading suggested. The same guard immediately
+  caught two things the review had missed: endpoint nested-`source` shape loss,
+  and null-key loss in roles. It also forced deleting `stringVal`/`boolVal`/
+  `intVal` in favour of erroring `strict*` twins, which was a separate finding in
+  the same review. **A round-trip property found more than the reviewer who
+  proposed it** — the argument for reaching past examples, every time.
+- **Written back:** `pingone-aic-manager` `docs/api/11-idm-endpoints.md` claimed
+  taskscanner schedules carry no inline script. All three in the sweep do, at
+  `invokeContext.task.script.source`. Corrected on branch
+  `docs/schedule-script-nesting`, together with the undocumented
+  `org.forgerock.openidm.script` alias an equality filter would skip, and a
+  dated `99-…` entry.
+
+### 2026-08-15 — Generated HCL was never escaped, and `strconv.Quote` is the wrong fix
+
+- **What:** `hclString` was `strconv.Quote`, which escapes for Go, not HCL.
+  `${` and `%{` reached Terraform as interpolation and directive sigils.
+  Pre-existing since the initial commit, but the last twelve commits added ~67
+  call sites and started routing genuinely hostile strings through it for the
+  first time: `custom_authz` JS, role `condition` query filters,
+  `scan_query_filter`, plaintext ESV values.
+- **Why missed:** `generate`'s tests assert the *shape* of emitted HCL against
+  known-benign fixtures. Nothing ever parsed the output back. A generator with no
+  round-trip test cannot notice that it emits a different language than it
+  intends.
+- **Guard:** applied — and the first proposed fix was wrong, which is the part
+  worth keeping. The review proposed
+  `strings.NewReplacer("${","$${","%{","%%{").Replace(strconv.Quote(s))`. That is
+  correct for the sigils but still fails the property, because `strconv.Quote`
+  emits `\xHH`, `\a`, `\b`, `\f`, `\v` — escapes HCL rejects. The right
+  primitive is `hclwrite.TokensForValue(cty.StringVal(s))`.
+  `FuzzHclStringRoundTrip` is what established that; it also turned up
+  HCL/cty NFC-normalising string values (U+0340 evaluates as U+0300), which is an
+  evaluation property rather than a quoting bug, so the fuzz skips non-NFC input.
+  **The property was worth more than the fix it was written to defend.**
+  Promoted to a Standing check.
 
 ### 2026-08-15 — Six copies of the remote-name resolver, tested six times at the wrong level
 
@@ -98,11 +176,17 @@ findings). Each should name the guard that will eventually retire it.
   name-keyed resource" without saying at what level, so five resources satisfied
   it with exactly the shape the 2026-08-14 entry had already recorded as giving
   false confidence.
-- **Guard:** proposed. One
-  `remoteName(id, remote types.String, fallback func() string) string` in
-  `internal/resources/`, plus one table-driven test over the resources' `Update`
-  paths through `testutil`'s fake transport. Standing check 2 amended to name
-  the level.
+- **Guard:** applied. `remoteName(id, remote types.String, fallback func() string)`
+  in `internal/resources/remote.go` is the only copy of the rule; every resource
+  grew a `write(ctx, plan, prior)` seam that resolves through it, and
+  `TestWriteTargetsPersistedNameAfterPrefixChange` drives all eight through a
+  fake transport asserting the request path (managed config asserts the object
+  `name` in the PUT body, since it is a whole-document write). The six
+  helper-level tests are deleted. Standing check 2 amended to name the level.
+- **Found while fixing:** inlining the fallback closure at each call site pushed
+  `idm_endpoint.Read` and `idm_schedule.Read` past `dupl`'s threshold. The right
+  answer was two one-line wrappers (`applyRemote`, `applyESVRemote`), not a
+  `//nolint` — worth remembering as the shape of a correct response to `dupl`.
 
 ### 2026-08-15 — `dupl` fired and was suppressed rather than answered
 
@@ -115,9 +199,19 @@ findings). Each should name the guard that will eventually retire it.
   itself says a recurring directive means the code is fighting a good check. The
   nolint comments are honest and accurate, which makes them easy to wave
   through.
-- **Guard:** proposed. A generic `hashedRuleResource[R any]` in `hashed.go`
-  parameterised by document accessor + typed rule, which removes both directives
-  rather than justifying them.
+- **Guard:** applied. `hashedRuleResource[Model, Rule]` in `hashed.go` owns
+  CRUD, import and lookup; the two resources are now a schema, a model and a
+  spec. `access_rule.go` 254 → 102 lines, `authentication_mapping.go` 235 → 86,
+  **both directives deleted**. The only `//nolint` left in the tree is the
+  pre-existing justified `unparam` on `nodetype.req`.
+- **Also fixed here:** `Replace*` gained the duplicate-hash pre-flight that
+  `Append*` already had. Without it, editing a rule into a form matching another
+  live entry left two copies at the new hash, `confirm*` expected one, and the
+  retry loop re-PUT an already-correct document six times (~15.5 s) before
+  failing with "was accepted but not persisted" — the opposite of what happened.
+  `TestReplaceRuleRefusesExistingContentHashBeforePut` asserts GET=1, PUT=0 and
+  a fast, accurate error. The client now returns `RuleConfirm` from every
+  mutator, so the four hardcoded `Count: 1` literals are gone.
 
 ### 2026-08-14 — Node `version` default breaks apply when AM omits the key
 
