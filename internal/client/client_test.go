@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/testutil"
 )
@@ -97,5 +98,114 @@ func TestNewValidatesAuthenticationInputs(t *testing.T) {
 	}
 	if _, err := New(Config{AccessToken: "token"}); err == nil {
 		t.Fatal("expected missing-tenant error")
+	}
+}
+
+func TestConfirmedWriteRetryPolicy(t *testing.T) {
+	instant := &Client{confirmDelay: func(int) time.Duration { return 0 }}
+
+	t.Run("retries until confirm accepts", func(t *testing.T) {
+		var writes int
+		err := instant.confirmedWrite(context.Background(), "config/access write",
+			func() (map[string]any, error) {
+				writes++
+				return map[string]any{"n": writes}, nil
+			},
+			func(got map[string]any) error {
+				if got["n"] != 3 {
+					return errors.New("still stale")
+				}
+				return nil
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if writes != 3 {
+			t.Fatalf("writes = %d, want 3", writes)
+		}
+	})
+
+	t.Run("exhausts attempts and names the document", func(t *testing.T) {
+		stale := errors.New("still stale")
+		var writes int
+		err := instant.confirmedWrite(context.Background(), "config/access write",
+			func() (map[string]any, error) {
+				writes++
+				return map[string]any{}, nil
+			},
+			func(map[string]any) error { return stale },
+		)
+		if writes != 6 {
+			t.Fatalf("writes = %d, want 6", writes)
+		}
+		if !errors.Is(err, stale) {
+			t.Fatalf("err = %v, want wrapped still-stale", err)
+		}
+		msg := err.Error()
+		for _, want := range []string{
+			"config/access write was accepted but not persisted",
+			"Q14",
+		} {
+			if !strings.Contains(msg, want) {
+				t.Fatalf("error %q does not contain %q", msg, want)
+			}
+		}
+	})
+
+	t.Run("write errors are not retried", func(t *testing.T) {
+		boom := errors.New("transport")
+		var writes int
+		err := instant.confirmedWrite(context.Background(), "config/access write",
+			func() (map[string]any, error) {
+				writes++
+				return nil, boom
+			},
+			func(map[string]any) error {
+				t.Fatal("confirm called after write error")
+				return nil
+			},
+		)
+		if writes != 1 || !errors.Is(err, boom) {
+			t.Fatalf("writes=%d err=%v", writes, err)
+		}
+	})
+
+	t.Run("cancelled context returns instead of sleeping", func(t *testing.T) {
+		// Production first delay is 500ms. Cancel after the first stale
+		// confirm so a missing ctx check would sleep that whole slot.
+		c := &Client{}
+		ctx, cancel := context.WithCancel(context.Background())
+		start := time.Now()
+		err := c.confirmedWrite(ctx, "config/access write",
+			func() (map[string]any, error) {
+				cancel()
+				return map[string]any{}, nil
+			},
+			func(map[string]any) error { return errors.New("still stale") },
+		)
+		elapsed := time.Since(start)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+		if elapsed > 200*time.Millisecond {
+			t.Fatalf("slept %s; should have returned on cancel", elapsed)
+		}
+	})
+}
+
+func TestConfirmedWriteBackoffSchedule(t *testing.T) {
+	c := &Client{}
+	want := []time.Duration{
+		500 * time.Millisecond,
+		time.Second,
+		2 * time.Second,
+		4 * time.Second,
+		8 * time.Second,
+	}
+	for i, d := range want {
+		if got := c.confirmRetryDelay(i); got != d {
+			t.Fatalf("attempt %d delay = %s, want %s", i, got, d)
+		}
 	}
 }
