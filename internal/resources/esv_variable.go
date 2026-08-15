@@ -103,8 +103,7 @@ func (r *esvVariableResource) Create(ctx context.Context, req resource.CreateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := prefix.ApplyESV(r.client.Prefix, plan.Name.ValueString())
-	got, err := r.write(ctx, remote, plan)
+	got, err := r.write(ctx, plan, esvVariableModel{})
 	if err != nil {
 		resp.Diagnostics.AddError("Create esv variable", err.Error())
 		return
@@ -118,7 +117,7 @@ func (r *esvVariableResource) Read(ctx context.Context, req resource.ReadRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := esvRemoteName(state, r.client.Prefix)
+	remote := applyESVRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
 	got, err := r.client.GetVariable(ctx, remote)
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
@@ -138,8 +137,7 @@ func (r *esvVariableResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := esvRemoteName(prior, r.client.Prefix)
-	got, err := r.write(ctx, remote, plan)
+	got, err := r.write(ctx, plan, prior)
 	if err != nil {
 		resp.Diagnostics.AddError("Update esv variable", err.Error())
 		return
@@ -153,7 +151,7 @@ func (r *esvVariableResource) Delete(ctx context.Context, req resource.DeleteReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.DeleteVariable(ctx, esvRemoteName(state, r.client.Prefix)); err != nil {
+	if err := r.client.DeleteVariable(ctx, applyESVRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())); err != nil {
 		resp.Diagnostics.AddError("Delete esv variable", err.Error())
 	}
 }
@@ -169,7 +167,8 @@ func (r *esvVariableResource) ImportState(ctx context.Context, req resource.Impo
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.StripESV(r.client.Prefix, id))...)
 }
 
-func (r *esvVariableResource) write(ctx context.Context, remote string, plan esvVariableModel) (esvVariableModel, error) {
+func (r *esvVariableResource) write(ctx context.Context, plan, prior esvVariableModel) (esvVariableModel, error) {
+	remote := applyESVRemote(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
 	got, err := r.client.PutVariable(ctx, remote, client.Variable{
 		ID:             remote,
 		Description:    plan.Description.ValueString(),
@@ -180,15 +179,6 @@ func (r *esvVariableResource) write(ctx context.Context, remote string, plan esv
 		return esvVariableModel{}, err
 	}
 	return variableToModel(got, plan.Name.ValueString(), r.client.Prefix), nil
-}
-
-func esvRemoteName(state esvVariableModel, pfx string) string {
-	for _, v := range []types.String{state.ID, state.RemoteName} {
-		if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
-			return v.ValueString()
-		}
-	}
-	return prefix.ApplyESV(pfx, state.Name.ValueString())
 }
 
 func variableToModel(v *client.Variable, logical, pfx string) esvVariableModel {

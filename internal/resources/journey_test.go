@@ -60,52 +60,8 @@ func TestTreeToModelPreservesTimeoutSettings(t *testing.T) {
 	}
 }
 
-func TestJourneyRemoteName(t *testing.T) {
-	tests := map[string]struct {
-		state journeyModel
-		pfx   string
-		want  string
-	}{
-		"persisted id wins over a changed prefix": {
-			state: journeyModel{
-				ID:         types.StringValue("OldPrefix_Tree"),
-				RemoteName: types.StringValue("OldPrefix_Tree"),
-				Name:       types.StringValue("Tree"),
-			},
-			pfx:  "NewPrefix_",
-			want: "OldPrefix_Tree",
-		},
-		"remote_name covers an id we have not read back yet": {
-			state: journeyModel{
-				ID:         types.StringNull(),
-				RemoteName: types.StringValue("OldPrefix_Tree"),
-				Name:       types.StringValue("Tree"),
-			},
-			pfx:  "NewPrefix_",
-			want: "OldPrefix_Tree",
-		},
-		"fresh import reconstructs from the prefix": {
-			state: journeyModel{
-				ID:         types.StringNull(),
-				RemoteName: types.StringNull(),
-				Name:       types.StringValue("Tree"),
-			},
-			pfx:  "Prefix_",
-			want: "Prefix_Tree",
-		},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			if got := journeyRemoteName(tt.state, tt.pfx); got != tt.want {
-				t.Fatalf("got %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-// The helper above is not enough on its own: write() has to consult it, or an
-// Update after a resource_prefix change PUTs a second tree and orphans the one
-// Read and Delete still address. Drive the real write path to prove it does.
+// write() has to consult remoteName, or an Update after a resource_prefix
+// change PUTs a second tree and orphans the one Read and Delete still address.
 func TestJourneyWriteTargetsPersistedTreeAfterPrefixChange(t *testing.T) {
 	var puts []string
 	httpClient := testutil.Client(func(req *http.Request) (*http.Response, error) {
@@ -154,8 +110,8 @@ func TestJourneyWriteTargetsPersistedTreeAfterPrefixChange(t *testing.T) {
 	if strings.Contains(puts[0], "NewPrefix_Tree") {
 		t.Fatalf("Update wrote to %q — that creates a second tree and orphans OldPrefix_Tree", puts[0])
 	}
-	if want := journeyRemoteName(prior, c.Prefix); !strings.HasSuffix(puts[0], want) {
-		t.Fatalf("Update wrote to %q, want the tree Read/Delete address (%q)", puts[0], want)
+	if !strings.HasSuffix(puts[0], "OldPrefix_Tree") {
+		t.Fatalf("Update wrote to %q, want the tree Read/Delete address (OldPrefix_Tree)", puts[0])
 	}
 }
 

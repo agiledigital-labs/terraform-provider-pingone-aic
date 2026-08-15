@@ -173,7 +173,7 @@ func (r *journeyResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := journeyRemoteName(state, r.client.Prefix)
+	remote := applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
 	raw, err := r.client.GetTree(ctx, state.Realm.ValueString(), remote)
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
@@ -212,33 +212,10 @@ func (r *journeyResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := journeyRemoteName(state, r.client.Prefix)
+	remote := applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
 	if err := r.client.DeleteTree(ctx, state.Realm.ValueString(), remote); err != nil {
 		resp.Diagnostics.AddError("Delete journey", err.Error())
 	}
-}
-
-// journeyRemoteID returns the AIC tree name recorded in state, or "" when the
-// resource has no remote identity yet (create, or an import before Read).
-func journeyRemoteID(state journeyModel) string {
-	for _, v := range []types.String{state.ID, state.RemoteName} {
-		if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
-			return v.ValueString()
-		}
-	}
-	return ""
-}
-
-// journeyRemoteName resolves which AIC tree to operate on. AM keys trees by
-// name and offers no rename, so once we know the stored name we must keep using
-// it: resource_prefix is provider-level config and never triggers replacement,
-// so recomputing the name from the prefix would silently address a different
-// tree after a prefix change.
-func journeyRemoteName(state journeyModel, pfx string) string {
-	if id := journeyRemoteID(state); id != "" {
-		return id
-	}
-	return prefix.Apply(pfx, state.Name.ValueString())
 }
 
 func (r *journeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -251,15 +228,11 @@ func (r *journeyResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.Strip(r.client.Prefix, parts[1]))...)
 }
 
-// write PUTs the planned tree. prior carries the state Terraform already holds
-// (zero on create); when it names a tree, that name wins over the prefixed plan
-// name so an Update keeps editing the tree Read and Delete address rather than
-// creating a second one alongside it.
+// write PUTs the planned tree. prior is the state Terraform already holds
+// (zero on create); remoteName keeps an Update on the tree Read and Delete
+// address after a resource_prefix change.
 func (r *journeyResource) write(ctx context.Context, plan, prior journeyModel) (journeyModel, error) {
-	remote := prefix.Apply(r.client.Prefix, plan.Name.ValueString())
-	if existing := journeyRemoteID(prior); existing != "" {
-		remote = existing
-	}
+	remote := applyRemote(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
 	body, err := modelToTree(plan, r.client.Prefix)
 	if err != nil {
 		return journeyModel{}, err

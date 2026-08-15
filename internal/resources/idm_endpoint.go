@@ -88,8 +88,7 @@ func (r *idmEndpointResource) Create(ctx context.Context, req resource.CreateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := prefix.Apply(r.client.Prefix, plan.Name.ValueString())
-	got, err := r.write(ctx, remote, plan)
+	got, err := r.write(ctx, plan, idmEndpointModel{})
 	if err != nil {
 		resp.Diagnostics.AddError("Create idm endpoint", err.Error())
 		return
@@ -103,7 +102,7 @@ func (r *idmEndpointResource) Read(ctx context.Context, req resource.ReadRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	got, err := r.client.GetEndpoint(ctx, configRemoteName(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString()))
+	got, err := r.client.GetEndpoint(ctx, applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString()))
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -122,8 +121,7 @@ func (r *idmEndpointResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := configRemoteName(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
-	got, err := r.write(ctx, remote, plan)
+	got, err := r.write(ctx, plan, prior)
 	if err != nil {
 		resp.Diagnostics.AddError("Update idm endpoint", err.Error())
 		return
@@ -137,7 +135,7 @@ func (r *idmEndpointResource) Delete(ctx context.Context, req resource.DeleteReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.DeleteEndpoint(ctx, configRemoteName(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())); err != nil {
+	if err := r.client.DeleteEndpoint(ctx, applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())); err != nil {
 		resp.Diagnostics.AddError("Delete idm endpoint", err.Error())
 	}
 }
@@ -157,7 +155,8 @@ func (r *idmEndpointResource) ImportState(ctx context.Context, req resource.Impo
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.Strip(r.client.Prefix, remote))...)
 }
 
-func (r *idmEndpointResource) write(ctx context.Context, remote string, plan idmEndpointModel) (idmEndpointModel, error) {
+func (r *idmEndpointResource) write(ctx context.Context, plan, prior idmEndpointModel) (idmEndpointModel, error) {
+	remote := applyRemote(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
 	got, err := r.client.PutEndpoint(ctx, remote, modelToEndpoint(plan))
 	if err != nil {
 		return idmEndpointModel{}, err
@@ -195,13 +194,4 @@ func endpointToModel(e *client.Endpoint, logical, pfx string) idmEndpointModel {
 		GlobalsObject: stringOrNull(e.GlobalsObject),
 		AllowedRoles:  stringListOrNull(e.AllowedRoles),
 	}
-}
-
-func configRemoteName(id, remote types.String, pfx, logical string) string {
-	for _, v := range []types.String{id, remote} {
-		if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
-			return v.ValueString()
-		}
-	}
-	return prefix.Apply(pfx, logical)
 }

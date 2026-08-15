@@ -5,22 +5,7 @@ import (
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/prefix"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
-
-func TestESVRemoteNamePersistsAcrossPrefixChange(t *testing.T) {
-	state := esvVariableModel{
-		ID:         types.StringValue("esv-oldprefix_test11"),
-		RemoteName: types.StringValue("esv-oldprefix_test11"),
-		Name:       types.StringValue("esv-test11"),
-	}
-	if got := esvRemoteName(state, "NewPrefix_"); got != "esv-oldprefix_test11" {
-		t.Fatalf("got %q", got)
-	}
-	if got := esvRemoteName(esvVariableModel{Name: types.StringValue("esv-test11")}, "Terraform_"); got != "esv-terraform-test11" {
-		t.Fatalf("create fallback = %q", got)
-	}
-}
 
 func TestVariableToModelStripsESVPrefixAndKeepsUnloaded(t *testing.T) {
 	m := variableToModel(&client.Variable{

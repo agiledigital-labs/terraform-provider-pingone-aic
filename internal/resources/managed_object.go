@@ -153,8 +153,8 @@ func (r *managedObjectResource) Create(ctx context.Context, req resource.CreateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := prefix.Apply(r.client.Prefix, plan.Name.ValueString())
-	if err := r.write(ctx, remote, plan, false); err != nil {
+	remote, err := r.write(ctx, plan, managedObjectModel{})
+	if err != nil {
 		resp.Diagnostics.AddError("Create managed object", err.Error())
 		return
 	}
@@ -172,7 +172,7 @@ func (r *managedObjectResource) Read(ctx context.Context, req resource.ReadReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := managedRemoteName(state, r.client.Prefix)
+	remote := applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
 	got, err := r.readModel(ctx, state.Name.ValueString(), remote)
 	if client.IsNotFound(err) || (err == nil && got.ID.IsNull()) {
 		resp.State.RemoveResource(ctx)
@@ -192,8 +192,8 @@ func (r *managedObjectResource) Update(ctx context.Context, req resource.UpdateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := managedRemoteName(prior, r.client.Prefix)
-	if err := r.write(ctx, remote, plan, true); err != nil {
+	remote, err := r.write(ctx, plan, prior)
+	if err != nil {
 		resp.Diagnostics.AddError("Update managed object", err.Error())
 		return
 	}
@@ -211,7 +211,7 @@ func (r *managedObjectResource) Delete(ctx context.Context, req resource.DeleteR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := managedRemoteName(state, r.client.Prefix)
+	remote := applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
 	err := r.client.MutateManaged(ctx, func(doc map[string]any) (map[string]any, []client.ManagedConfirm, error) {
 		next, err := client.RemoveManagedObject(doc, remote)
 		if err != nil {
@@ -235,8 +235,10 @@ func (r *managedObjectResource) ImportState(ctx context.Context, req resource.Im
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.Strip(r.client.Prefix, id))...)
 }
 
-func (r *managedObjectResource) write(ctx context.Context, remote string, plan managedObjectModel, replace bool) error {
-	return r.client.MutateManaged(ctx, func(doc map[string]any) (map[string]any, []client.ManagedConfirm, error) {
+func (r *managedObjectResource) write(ctx context.Context, plan, prior managedObjectModel) (string, error) {
+	remote := applyRemote(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
+	replace := persistedRemote(prior.ID, prior.RemoteName) != ""
+	err := r.client.MutateManaged(ctx, func(doc map[string]any) (map[string]any, []client.ManagedConfirm, error) {
 		if !replace {
 			if _, found, err := client.FindManagedObject(doc, remote); err != nil {
 				return nil, nil, err
@@ -252,6 +254,7 @@ func (r *managedObjectResource) write(ctx context.Context, remote string, plan m
 		}
 		return next, []client.ManagedConfirm{{Name: remote, Content: obj}}, nil
 	})
+	return remote, err
 }
 
 func (r *managedObjectResource) readModel(ctx context.Context, logical, remote string) (managedObjectModel, error) {
@@ -271,15 +274,6 @@ func (r *managedObjectResource) readModel(ctx context.Context, logical, remote s
 		return managedObjectModel{}, err
 	}
 	return managedToModel(decoded, logical, remote), nil
-}
-
-func managedRemoteName(state managedObjectModel, pfx string) string {
-	for _, v := range []types.String{state.ID, state.RemoteName} {
-		if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
-			return v.ValueString()
-		}
-	}
-	return prefix.Apply(pfx, state.Name.ValueString())
 }
 
 func modelToManaged(plan managedObjectModel) managedobject.Object {

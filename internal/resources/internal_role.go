@@ -118,25 +118,12 @@ func (r *internalRoleResource) Create(ctx context.Context, req resource.CreateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := prefix.Apply(r.client.Prefix, plan.Name.ValueString())
-	if _, err := r.client.GetRole(ctx, remote); err == nil {
-		resp.Diagnostics.AddError("Create internal role", fmt.Sprintf("internal role %q already exists", remote))
-		return
-	} else if !client.IsNotFound(err) {
-		resp.Diagnostics.AddError("Create internal role", err.Error())
-		return
-	}
-	role, err := modelToRole(ctx, plan, remote)
+	got, err := r.write(ctx, plan, internalRoleModel{})
 	if err != nil {
 		resp.Diagnostics.AddError("Create internal role", err.Error())
 		return
 	}
-	got, err := r.client.PutRole(ctx, remote, "", role)
-	if err != nil {
-		resp.Diagnostics.AddError("Create internal role", err.Error())
-		return
-	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, roleToModel(got, plan.Name.ValueString(), remote))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, got)...)
 }
 
 func (r *internalRoleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -145,7 +132,7 @@ func (r *internalRoleResource) Read(ctx context.Context, req resource.ReadReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := configRemoteName(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
+	remote := applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
 	got, err := r.client.GetRole(ctx, remote)
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
@@ -165,23 +152,12 @@ func (r *internalRoleResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := configRemoteName(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
-	live, err := r.client.GetRole(ctx, remote)
+	got, err := r.write(ctx, plan, prior)
 	if err != nil {
 		resp.Diagnostics.AddError("Update internal role", err.Error())
 		return
 	}
-	role, err := modelToRole(ctx, plan, remote)
-	if err != nil {
-		resp.Diagnostics.AddError("Update internal role", err.Error())
-		return
-	}
-	got, err := r.client.PutRole(ctx, remote, live.Rev, role)
-	if err != nil {
-		resp.Diagnostics.AddError("Update internal role", err.Error())
-		return
-	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, roleToModel(got, plan.Name.ValueString(), remote))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, got)...)
 }
 
 func (r *internalRoleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -190,7 +166,7 @@ func (r *internalRoleResource) Delete(ctx context.Context, req resource.DeleteRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := configRemoteName(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
+	remote := applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())
 	if err := r.client.DeleteRole(ctx, remote); err != nil {
 		resp.Diagnostics.AddError("Delete internal role", err.Error())
 	}
@@ -206,6 +182,33 @@ func (r *internalRoleResource) ImportState(ctx context.Context, req resource.Imp
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("remote_name"), id)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.Strip(r.client.Prefix, id))...)
+}
+
+func (r *internalRoleResource) write(ctx context.Context, plan, prior internalRoleModel) (internalRoleModel, error) {
+	remote := applyRemote(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
+	var rev string
+	if persistedRemote(prior.ID, prior.RemoteName) == "" {
+		if _, err := r.client.GetRole(ctx, remote); err == nil {
+			return internalRoleModel{}, fmt.Errorf("internal role %q already exists", remote)
+		} else if !client.IsNotFound(err) {
+			return internalRoleModel{}, err
+		}
+	} else {
+		live, err := r.client.GetRole(ctx, remote)
+		if err != nil {
+			return internalRoleModel{}, err
+		}
+		rev = live.Rev
+	}
+	role, err := modelToRole(ctx, plan, remote)
+	if err != nil {
+		return internalRoleModel{}, err
+	}
+	got, err := r.client.PutRole(ctx, remote, rev, role)
+	if err != nil {
+		return internalRoleModel{}, err
+	}
+	return roleToModel(got, plan.Name.ValueString(), remote), nil
 }
 
 func modelToRole(ctx context.Context, plan internalRoleModel, remote string) (client.Role, error) {
