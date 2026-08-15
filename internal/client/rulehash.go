@@ -119,6 +119,28 @@ func countRuleHash(rules []map[string]any, hash string) (int, error) {
 	return len(idxs), nil
 }
 
+func replacementRuleIndex(rules []map[string]any, oldHash, newHash, kind string) (int, error) {
+	oldIndexes, err := FindRuleHashes(rules, oldHash)
+	if err != nil {
+		return 0, err
+	}
+	if len(oldIndexes) == 0 {
+		return 0, fmt.Errorf("%s %s is gone; cannot update", kind, ShortHash(oldHash))
+	}
+
+	index := oldIndexes[0]
+	newIndexes, err := FindRuleHashes(rules, newHash)
+	if err != nil {
+		return 0, err
+	}
+	for _, other := range newIndexes {
+		if other != index {
+			return 0, fmt.Errorf("a different %s already has this content hash (%s)", kind, ShortHash(newHash))
+		}
+	}
+	return index, nil
+}
+
 func requireStringField(m map[string]any, key string) (string, error) {
 	v, ok := m[key]
 	if !ok || v == nil {

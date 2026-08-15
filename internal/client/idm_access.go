@@ -161,58 +161,55 @@ func confirmAccess(doc map[string]any, expect RuleConfirm) error {
 	return nil
 }
 
-func AppendAccessRule(doc map[string]any, rule AccessRule) (map[string]any, string, error) {
+func AppendAccessRule(doc map[string]any, rule AccessRule) (map[string]any, RuleConfirm, error) {
 	encoded := EncodeAccessRule(rule)
 	hash, err := Digest(encoded)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	rules, err := AccessRules(doc)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	n, err := countRuleHash(rules, hash)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	if n > 0 {
-		return nil, "", fmt.Errorf("access rule %s already exists; import it instead of creating a duplicate", ShortHash(hash))
+		return nil, RuleConfirm{}, fmt.Errorf("access rule %s already exists; import it instead of creating a duplicate", ShortHash(hash))
 	}
-	return SetAccessRules(doc, append(rules, encoded)), hash, nil
+	return SetAccessRules(doc, append(rules, encoded)), RuleConfirm{Hash: hash, Count: 1}, nil
 }
 
-func ReplaceAccessRule(doc map[string]any, oldHash string, rule AccessRule) (map[string]any, string, error) {
+func ReplaceAccessRule(doc map[string]any, oldHash string, rule AccessRule) (map[string]any, RuleConfirm, error) {
 	encoded := EncodeAccessRule(rule)
 	newHash, err := Digest(encoded)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	rules, err := AccessRules(doc)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
-	idxs, err := FindRuleHashes(rules, oldHash)
+	index, err := replacementRuleIndex(rules, oldHash, newHash, "access rule")
 	if err != nil {
-		return nil, "", err
-	}
-	if len(idxs) == 0 {
-		return nil, "", fmt.Errorf("access rule %s is gone; cannot update", ShortHash(oldHash))
+		return nil, RuleConfirm{}, err
 	}
 	next := append([]map[string]any(nil), rules...)
-	next[idxs[0]] = encoded
-	return SetAccessRules(doc, next), newHash, nil
+	next[index] = encoded
+	return SetAccessRules(doc, next), RuleConfirm{Hash: newHash, Count: 1}, nil
 }
 
-// RemoveAccessRule deletes the first rule matching hash. remaining is how
-// many copies of that hash are left (0 if it was unique or already gone).
-func RemoveAccessRule(doc map[string]any, hash string) (map[string]any, int, error) {
+// RemoveAccessRule deletes the first rule matching hash. Its confirmation
+// expects however many copies remain (zero if it was unique or already gone).
+func RemoveAccessRule(doc map[string]any, hash string) (map[string]any, RuleConfirm, error) {
 	rules, err := AccessRules(doc)
 	if err != nil {
-		return nil, 0, err
+		return nil, RuleConfirm{}, err
 	}
 	next, remaining, err := removeFirstHash(rules, hash)
 	if err != nil {
-		return nil, 0, err
+		return nil, RuleConfirm{}, err
 	}
-	return SetAccessRules(doc, next), remaining, nil
+	return SetAccessRules(doc, next), RuleConfirm{Hash: hash, Count: remaining}, nil
 }

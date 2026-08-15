@@ -78,7 +78,7 @@ func TestAppendReplaceRemoveAuthMappingPreservesSiblingsAndRSFilter(t *testing.T
 			"staticUserMapping": []any{keep},
 		},
 	}
-	next, hash, err := AppendAuthMapping(doc, AuthMapping{
+	next, appendConfirm, err := AppendAuthMapping(doc, AuthMapping{
 		Subject:   "Terraform_probe",
 		LocalUser: "internal/user/anonymous",
 		Roles:     []string{"internal/role/Terraform_probe"},
@@ -100,7 +100,8 @@ func TestAppendReplaceRemoveAuthMappingPreservesSiblingsAndRSFilter(t *testing.T
 	}
 
 	flag := true
-	replaced, newHash, err := ReplaceAuthMapping(next, hash, AuthMapping{
+	hash := appendConfirm.Hash
+	replaced, replaceConfirm, err := ReplaceAuthMapping(next, hash, AuthMapping{
 		Subject:                   "Terraform_probe",
 		LocalUser:                 "internal/user/anonymous",
 		Roles:                     []string{"internal/role/Terraform_probe"},
@@ -109,6 +110,7 @@ func TestAppendReplaceRemoveAuthMappingPreservesSiblingsAndRSFilter(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	newHash := replaceConfirm.Hash
 	if newHash == hash {
 		t.Fatal("update kept hash")
 	}
@@ -117,12 +119,12 @@ func TestAppendReplaceRemoveAuthMappingPreservesSiblingsAndRSFilter(t *testing.T
 		t.Fatal("replace rewrote sibling")
 	}
 
-	removed, remaining, err := RemoveAuthMapping(replaced, newHash)
+	removed, removeConfirm, err := RemoveAuthMapping(replaced, newHash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if remaining != 0 {
-		t.Fatalf("remaining = %d", remaining)
+	if removeConfirm.Count != 0 {
+		t.Fatalf("remaining = %d", removeConfirm.Count)
 	}
 	maps, _ = AuthMappings(removed)
 	if len(maps) != 1 || DigestMust(t, maps[0]) != DigestMust(t, keep) {

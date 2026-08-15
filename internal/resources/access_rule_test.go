@@ -38,7 +38,8 @@ func TestReadAccessRuleFindsByShortHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := map[string]any{"configs": []any{encoded}}
-	got, err := readAccessRule(doc, hash[:8])
+	r := hashedRuleResource[accessRuleModel, client.AccessRule]{spec: accessRuleSpec()}
+	got, err := r.read(doc, hash[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +50,8 @@ func TestReadAccessRuleFindsByShortHash(t *testing.T) {
 
 func TestReadAccessRuleMissingIsNil(t *testing.T) {
 	doc := map[string]any{"configs": []any{}}
-	got, err := readAccessRule(doc, "aaaaaaaa")
+	r := hashedRuleResource[accessRuleModel, client.AccessRule]{spec: accessRuleSpec()}
+	got, err := r.read(doc, "aaaaaaaa")
 	if err != nil || got != nil {
 		t.Fatalf("got %#v, %v", got, err)
 	}
