@@ -18,17 +18,29 @@ findings). Each should name the guard that will eventually retire it.
   not affected — see Verified against._
 - **Know what a resource is keyed by before reasoning about renames.**
   `resource_prefix` is provider-level, so changing it never triggers
-  `RequiresReplace`. Name-keyed resources (journeys/trees, OAuth2 clients) must resolve every
-  CRUD path from the persisted id or an update orphans the original; UUID-keyed
-  resources (scripts) rename in place and are fine. _Guard:
+  `RequiresReplace`. Name-keyed resources (journeys/trees, OAuth2 clients) must
+  resolve every CRUD path from the persisted id or an update orphans the
+  original; UUID-keyed resources (scripts) rename in place and are fine. _Guard:
   `TestJourneyWriteTargetsPersistedTreeAfterPrefixChange` and
-  `TestOAuth2RemoteNamePersistsAcrossPrefixChange`. Add the equivalent
-  for any new name-keyed resource._
+  `TestOAuth2RemoteNamePersistsAcrossPrefixChange`. Add the equivalent for any
+  new name-keyed resource._ **The test must drive `Update` through a fake
+  transport, not call the resolver helper.** The 2026-08-14 entry below is the
+  whole reason: the bug was `write()` ignoring the helper, and a helper-level
+  test cannot see that. Every resource added on 2026-08-15 has only the
+  helper-level version.
 - **Fail-closed validators must be reachable from one entry point.** This repo's
   core rule (unknown key = error) only holds if every caller runs every
   validator. Two validators that must be called as a pair are a latent
   passthrough. _Guard: `TreeWriteBody` now calls `validateTreeInternals` itself;
   `TestTreeWriteBodyRejectsNestedUnknownFields` locks it in._
+- **Every nested object a decoder descends into needs its own `rejectUnknown`.**
+  Guarding the top-level body and stopping one level short is the same
+  passthrough hole, only harder to see: the decoder reads the two keys it knows
+  and the re-encode silently deletes the rest. Count the `asObject(...)` calls
+  in a decoder and check each has a matching key set. _Guard: none yet — the
+  proposed one is a `Decode → Encode → Decode` + key-set equality sweep over
+  `testdata/`, which fails on any key the decoder cannot carry. Not applied;
+  `schedule.invokeContext[.task].script.globals` is live and dropped today._
 - **Destructive filesystem work needs a marker, not just a matching name.**
   Anything that deletes under a user-supplied path must prove the directory is
   ours first. _Guard: `TestCleanGeneratedFilesRefusesUnmarkedDirectory`._
@@ -45,11 +57,67 @@ findings). Each should name the guard that will eventually retire it.
   `MutateAuthentication` do the same with `accessMu` / `authMu`._
 
 - **Error identity must survive wrapping.** A helper that classifies an error
-  (`IsNotFound` and friends) must use `errors.As`/`errors.Is`, never a bare
-  type assertion — the bug is invisible until someone adds a `%w` upstream.
-  _Guard: `errorlint`, enabled 2026-08-14._
+  (`IsNotFound` and friends) must use `errors.As`/`errors.Is`, never a bare type
+  assertion — the bug is invisible until someone adds a `%w` upstream. _Guard:
+  `errorlint`, enabled 2026-08-14._
 
 ## Findings log
+
+### 2026-08-15 — Schedule script `globals` decoded away, then written away
+
+- **What:** `DecodeSchedule` descends into `invokeContext.script` and
+  `invokeContext.task.script` and reads only `source` and `type`. Neither
+  sub-object gets a `rejectUnknown`. Three of the six schedules in the tenant
+  sweep (`Test`, `UpdateReviewList`, `test_sign_in`) carry a `globals` object
+  there. `EncodeSchedule` rebuilds `script` from `{source, type}`, so importing
+  or generating one of those schedules and applying it **deletes its `globals`**
+  — silently, which is the one thing this repo's core rule exists to prevent.
+  `scan.taskState` and `scan.recovery` have the same hole.
+- **Why missed:** the top-level allowlist and `invokeContext` / `scan` were
+  guarded, so the file reads as fail-closed at a glance. Standing check 3 was
+  written about two validators that must be _called as a pair_; it did not
+  prompt for validators that were never written for the third and fourth level
+  down. `internal/client/idm_endpoint.go`, in the same commit, does guard
+  `globals.endpointConfig` — the author knew the shape mattered.
+  `TestDecodeAllLiveScheduleFixtures` passes because it only asserts that decode
+  succeeds and `Name`/`InvokeService` are non-empty.
+- **Guard:** proposed, not applied. Add `scheduleScriptKeys` (`source`, `type`,
+  `globals`) + `taskStateKeys` + `recoveryKeys`, carry `Globals` on
+  `client.Schedule`, and replace the per-kind decode sweeps with one
+  table-driven `Decode → Encode → Decode` round-trip over `testdata/` that also
+  compares key sets — it fails on any live key the model cannot carry, for every
+  kind at once. Promoted to Standing check 3b.
+
+### 2026-08-15 — Six copies of the remote-name resolver, tested six times at the wrong level
+
+- **What:** `configRemoteName` and `oauth2RemoteName` are byte-identical;
+  `esvRemoteName`, `secretRemoteName` and `managedRemoteName` are the same loop
+  with a different fallback; `journeyRemoteName` is a sixth variant. Each got
+  its own near-identical unit test asserting the _helper_.
+- **Why missed:** Standing check 2 said "add the equivalent test for any new
+  name-keyed resource" without saying at what level, so five resources satisfied
+  it with exactly the shape the 2026-08-14 entry had already recorded as giving
+  false confidence.
+- **Guard:** proposed. One
+  `remoteName(id, remote types.String, fallback func() string) string` in
+  `internal/resources/`, plus one table-driven test over the resources' `Update`
+  paths through `testutil`'s fake transport. Standing check 2 amended to name
+  the level.
+
+### 2026-08-15 — `dupl` fired and was suppressed rather than answered
+
+- **What:** the access-rule and authentication-mapping resources are a parallel
+  CRUD implementation; `dupl` caught the `Update` pair and the change added
+  `//nolint:dupl` to both. `Create` and `Delete` are equally parallel and only
+  escaped because the threshold is 150.
+- **Why missed:** `dupl` was enabled _because_ "a third parallel copy of the AM
+  JSON decode helpers reached review once" (`.golangci.yml`), and the config
+  itself says a recurring directive means the code is fighting a good check. The
+  nolint comments are honest and accurate, which makes them easy to wave
+  through.
+- **Guard:** proposed. A generic `hashedRuleResource[R any]` in `hashed.go`
+  parameterised by document accessor + typed rule, which removes both directives
+  rather than justifying them.
 
 ### 2026-08-14 — Node `version` default breaks apply when AM omits the key
 
@@ -115,18 +183,18 @@ findings). Each should name the guard that will eventually retire it.
 ### 2026-08-14 — `IsNotFound` was blind to wrapped errors
 
 - **What:** `client.IsNotFound` used a bare type assertion, so a 404 wrapped
-  with `%w` read as "still exists". It gates the "resource is gone, drop it
-  from state" path in all three resources, so `Read` would surface an error
-  instead of removing the resource and `apply` would never converge on an
-  out-of-band deletion.
+  with `%w` read as "still exists". It gates the "resource is gone, drop it from
+  state" path in all three resources, so `Read` would surface an error instead
+  of removing the resource and `apply` would never converge on an out-of-band
+  deletion.
 - **Why missed:** latent, not live — every read path today returns `*APIError`
-  unwrapped, so no test could fail and no review would see a symptom. The
-  client wraps with `%w` in two dozen places; one future wrap in a getter
-  would have armed it silently. Neither the craft review nor the original
-  change looked for *error-identity* bugs, only for value bugs.
+  unwrapped, so no test could fail and no review would see a symptom. The client
+  wraps with `%w` in two dozen places; one future wrap in a getter would have
+  armed it silently. Neither the craft review nor the original change looked for
+  _error-identity_ bugs, only for value bugs.
 - **Guard:** applied. `errors.As`, plus a table test over bare/once/twice
-  wrapped 404s that was verified to fail before the fix. `errorlint` is now
-  in the gate set and would catch the next one.
+  wrapped 404s that was verified to fail before the fix. `errorlint` is now in
+  the gate set and would catch the next one.
 
 ### 2026-08-14 — Allowlist rejected a shape a sixth of the tenant carries
 
@@ -173,9 +241,9 @@ were deleted and confirmed 404 afterwards.
   have none, so it only bites on import. Fix would be to round-trip the raw
   value through state.
 - **Should more linters go on?** Free today (0 findings each): `bodyclose`,
-  `nilerr`, `noctx`, `misspell`, `copyloopvar`, `wastedassign` — `bodyclose`
-  and `nilerr` are cheap insurance for an HTTP-client-shaped repo. `revive`
-  would add 50, 49 of them missing doc comments on exported symbols: a real
-  but separate documentation slice. `gosec` (6) wants 0600/0750 on generated
-  `.tf` and `.js` output, which is wrong here — those are meant to be readable
-  and committed.
+  `nilerr`, `noctx`, `misspell`, `copyloopvar`, `wastedassign` — `bodyclose` and
+  `nilerr` are cheap insurance for an HTTP-client-shaped repo. `revive` would
+  add 50, 49 of them missing doc comments on exported symbols: a real but
+  separate documentation slice. `gosec` (6) wants 0600/0750 on generated `.tf`
+  and `.js` output, which is wrong here — those are meant to be readable and
+  committed.
