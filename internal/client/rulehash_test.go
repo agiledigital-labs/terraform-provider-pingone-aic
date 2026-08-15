@@ -1,8 +1,16 @@
 package client
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/testutil"
 )
 
 func TestDigestMatchesPythonCanonicalForm(t *testing.T) {
@@ -26,6 +34,82 @@ func TestDigestMatchesPythonCanonicalForm(t *testing.T) {
 	}
 	if ShortHash(a) != a[:8] {
 		t.Fatalf("short = %q", ShortHash(a))
+	}
+}
+
+func TestReplaceRuleRefusesExistingContentHashBeforePut(t *testing.T) {
+	accessOld := AccessRule{Pattern: "old", Roles: "*", Methods: "read"}
+	accessNew := AccessRule{Pattern: "new", Roles: "*", Methods: "read"}
+	authOld := AuthMapping{Subject: "old", LocalUser: "internal/user/anonymous"}
+	authNew := AuthMapping{Subject: "new", LocalUser: "internal/user/anonymous"}
+
+	tests := []struct {
+		name       string
+		errorLabel string
+		doc        map[string]any
+		mutate     func(context.Context, *Client) error
+	}{
+		{
+			name:       "access",
+			errorLabel: "access rule",
+			doc: map[string]any{"_id": "access", "configs": []any{
+				EncodeAccessRule(accessOld), EncodeAccessRule(accessNew),
+			}},
+			mutate: func(ctx context.Context, c *Client) error {
+				oldHash, _ := AccessRuleHash(accessOld)
+				return c.MutateAccess(ctx, func(doc map[string]any) (map[string]any, RuleConfirm, error) {
+					return ReplaceAccessRule(doc, oldHash, accessNew)
+				})
+			},
+		},
+		{
+			name:       "authentication",
+			errorLabel: "authentication mapping",
+			doc: map[string]any{"_id": "authentication", "rsFilter": map[string]any{"staticUserMapping": []any{
+				EncodeAuthMapping(authOld), EncodeAuthMapping(authNew),
+			}}},
+			mutate: func(ctx context.Context, c *Client) error {
+				oldHash, _ := AuthMappingHash(authOld)
+				return c.MutateAuthentication(ctx, func(doc map[string]any) (map[string]any, RuleConfirm, error) {
+					return ReplaceAuthMapping(doc, oldHash, authNew)
+				})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gets, puts int
+			httpClient := testutil.Client(func(req *http.Request) (*http.Response, error) {
+				switch req.Method {
+				case http.MethodGet:
+					gets++
+				case http.MethodPut:
+					puts++
+				}
+				body, err := json.Marshal(tt.doc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header)}, nil
+			})
+			c, err := New(Config{TenantURL: "https://tenant.example", AccessToken: "token", HTTPClient: httpClient})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			started := time.Now()
+			err = tt.mutate(context.Background(), c)
+			if err == nil || !strings.Contains(err.Error(), "a different "+tt.errorLabel) || !strings.Contains(err.Error(), "already has this content hash") {
+				t.Fatalf("error = %v", err)
+			}
+			if gets != 1 || puts != 0 {
+				t.Fatalf("requests: GET=%d PUT=%d, want GET=1 PUT=0", gets, puts)
+			}
+			if elapsed := time.Since(started); elapsed > time.Second {
+				t.Fatalf("duplicate check took %s", elapsed)
+			}
+		})
 	}
 }
 

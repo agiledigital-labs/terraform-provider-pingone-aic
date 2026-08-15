@@ -166,59 +166,56 @@ func confirmAuth(doc map[string]any, expect RuleConfirm) error {
 	return nil
 }
 
-func AppendAuthMapping(doc map[string]any, mapping AuthMapping) (map[string]any, string, error) {
+func AppendAuthMapping(doc map[string]any, mapping AuthMapping) (map[string]any, RuleConfirm, error) {
 	encoded := EncodeAuthMapping(mapping)
 	hash, err := Digest(encoded)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	maps, err := AuthMappings(doc)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	n, err := countRuleHash(maps, hash)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	if n > 0 {
-		return nil, "", fmt.Errorf("authentication mapping %s already exists; import it instead of creating a duplicate", ShortHash(hash))
+		return nil, RuleConfirm{}, fmt.Errorf("authentication mapping %s already exists; import it instead of creating a duplicate", ShortHash(hash))
 	}
 	next, err := SetAuthMappings(doc, append(maps, encoded))
-	return next, hash, err
+	return next, RuleConfirm{Hash: hash, Count: 1}, err
 }
 
-func ReplaceAuthMapping(doc map[string]any, oldHash string, mapping AuthMapping) (map[string]any, string, error) {
+func ReplaceAuthMapping(doc map[string]any, oldHash string, mapping AuthMapping) (map[string]any, RuleConfirm, error) {
 	encoded := EncodeAuthMapping(mapping)
 	newHash, err := Digest(encoded)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
 	maps, err := AuthMappings(doc)
 	if err != nil {
-		return nil, "", err
+		return nil, RuleConfirm{}, err
 	}
-	idxs, err := FindRuleHashes(maps, oldHash)
+	index, err := replacementRuleIndex(maps, oldHash, newHash, "authentication mapping")
 	if err != nil {
-		return nil, "", err
-	}
-	if len(idxs) == 0 {
-		return nil, "", fmt.Errorf("authentication mapping %s is gone; cannot update", ShortHash(oldHash))
+		return nil, RuleConfirm{}, err
 	}
 	nextMaps := append([]map[string]any(nil), maps...)
-	nextMaps[idxs[0]] = encoded
+	nextMaps[index] = encoded
 	next, err := SetAuthMappings(doc, nextMaps)
-	return next, newHash, err
+	return next, RuleConfirm{Hash: newHash, Count: 1}, err
 }
 
-func RemoveAuthMapping(doc map[string]any, hash string) (map[string]any, int, error) {
+func RemoveAuthMapping(doc map[string]any, hash string) (map[string]any, RuleConfirm, error) {
 	maps, err := AuthMappings(doc)
 	if err != nil {
-		return nil, 0, err
+		return nil, RuleConfirm{}, err
 	}
 	next, remaining, err := removeFirstHash(maps, hash)
 	if err != nil {
-		return nil, 0, err
+		return nil, RuleConfirm{}, err
 	}
 	out, err := SetAuthMappings(doc, next)
-	return out, remaining, err
+	return out, RuleConfirm{Hash: hash, Count: remaining}, err
 }

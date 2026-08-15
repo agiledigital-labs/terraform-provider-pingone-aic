@@ -55,7 +55,8 @@ func TestReadAuthMappingFindsByHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := map[string]any{"rsFilter": map[string]any{"staticUserMapping": []any{encoded}}}
-	got, err := readAuthMapping(doc, hash)
+	r := hashedRuleResource[authMappingModel, client.AuthMapping]{spec: authenticationMappingSpec()}
+	got, err := r.read(doc, hash)
 	if err != nil {
 		t.Fatal(err)
 	}

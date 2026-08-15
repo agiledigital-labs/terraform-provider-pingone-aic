@@ -96,7 +96,7 @@ func TestAppendReplaceRemoveAccessRulePreservesSiblings(t *testing.T) {
 	keep := map[string]any{"pattern": "keep", "roles": "*", "methods": "read"}
 	doc := map[string]any{"_id": "access", "configs": []any{keep}}
 	star := "*"
-	next, hash, err := AppendAccessRule(doc, AccessRule{Pattern: "probe", Roles: "*", Methods: "query", Actions: &star})
+	next, confirm, err := AppendAccessRule(doc, AccessRule{Pattern: "probe", Roles: "*", Methods: "query", Actions: &star})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,10 +108,12 @@ func TestAppendReplaceRemoveAccessRulePreservesSiblings(t *testing.T) {
 		t.Fatal("append rewrote sibling")
 	}
 
-	replaced, newHash, err := ReplaceAccessRule(next, hash, AccessRule{Pattern: "probe", Roles: "*", Methods: "query,read", Actions: &star})
+	hash := confirm.Hash
+	replaced, replaceConfirm, err := ReplaceAccessRule(next, hash, AccessRule{Pattern: "probe", Roles: "*", Methods: "query,read", Actions: &star})
 	if err != nil {
 		t.Fatal(err)
 	}
+	newHash := replaceConfirm.Hash
 	if newHash == hash {
 		t.Fatal("update kept hash")
 	}
@@ -123,12 +125,12 @@ func TestAppendReplaceRemoveAccessRulePreservesSiblings(t *testing.T) {
 		t.Fatalf("replace = %#v", rules[1])
 	}
 
-	removed, remaining, err := RemoveAccessRule(replaced, newHash)
+	removed, removeConfirm, err := RemoveAccessRule(replaced, newHash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if remaining != 0 {
-		t.Fatalf("remaining = %d", remaining)
+	if removeConfirm.Count != 0 {
+		t.Fatalf("remaining = %d", removeConfirm.Count)
 	}
 	rules, _ = AccessRules(removed)
 	if len(rules) != 1 || DigestMust(t, rules[0]) != DigestMust(t, keep) {
@@ -149,12 +151,12 @@ func TestRemoveAccessRuleRemovesFirstDuplicateOnly(t *testing.T) {
 	dup := map[string]any{"pattern": "x", "roles": "*", "methods": "read"}
 	doc := map[string]any{"configs": []any{dup, map[string]any{"pattern": "y", "roles": "*", "methods": "read"}, dup}}
 	h := DigestMust(t, dup)
-	next, remaining, err := RemoveAccessRule(doc, h)
+	next, confirm, err := RemoveAccessRule(doc, h)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if remaining != 1 {
-		t.Fatalf("remaining = %d", remaining)
+	if confirm.Count != 1 {
+		t.Fatalf("remaining = %d", confirm.Count)
 	}
 	rules, _ := AccessRules(next)
 	if len(rules) != 2 {
