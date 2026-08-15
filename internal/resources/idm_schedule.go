@@ -123,7 +123,7 @@ func (r *idmScheduleResource) Create(ctx context.Context, req resource.CreateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	got, err := r.write(ctx, prefix.Apply(r.client.Prefix, plan.Name.ValueString()), plan)
+	got, err := r.write(ctx, plan, idmScheduleModel{})
 	if err != nil {
 		resp.Diagnostics.AddError("Create idm schedule", err.Error())
 		return
@@ -137,7 +137,7 @@ func (r *idmScheduleResource) Read(ctx context.Context, req resource.ReadRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	got, err := r.client.GetSchedule(ctx, configRemoteName(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString()))
+	got, err := r.client.GetSchedule(ctx, applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString()))
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -156,7 +156,7 @@ func (r *idmScheduleResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	got, err := r.write(ctx, configRemoteName(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString()), plan)
+	got, err := r.write(ctx, plan, prior)
 	if err != nil {
 		resp.Diagnostics.AddError("Update idm schedule", err.Error())
 		return
@@ -170,7 +170,7 @@ func (r *idmScheduleResource) Delete(ctx context.Context, req resource.DeleteReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.DeleteSchedule(ctx, configRemoteName(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())); err != nil {
+	if err := r.client.DeleteSchedule(ctx, applyRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())); err != nil {
 		resp.Diagnostics.AddError("Delete idm schedule", err.Error())
 	}
 }
@@ -187,7 +187,8 @@ func (r *idmScheduleResource) ImportState(ctx context.Context, req resource.Impo
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.Strip(r.client.Prefix, remote))...)
 }
 
-func (r *idmScheduleResource) write(ctx context.Context, remote string, plan idmScheduleModel) (idmScheduleModel, error) {
+func (r *idmScheduleResource) write(ctx context.Context, plan, prior idmScheduleModel) (idmScheduleModel, error) {
+	remote := applyRemote(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
 	got, err := r.client.PutSchedule(ctx, remote, modelToSchedule(plan))
 	if err != nil {
 		return idmScheduleModel{}, err

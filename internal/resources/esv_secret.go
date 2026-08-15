@@ -123,18 +123,12 @@ func (r *esvSecretResource) Create(ctx context.Context, req resource.CreateReque
 		resp.Diagnostics.AddError("Create esv secret", "value is required on create (AIC never returns secret values).")
 		return
 	}
-	remote := prefix.ApplyESV(r.client.Prefix, plan.Name.ValueString())
-	got, err := r.client.CreateSecret(ctx, remote, client.Secret{
-		ID:                remote,
-		Description:       plan.Description.ValueString(),
-		Encoding:          plan.Encoding.ValueString(),
-		UseInPlaceholders: plan.UseInPlaceholders.ValueBool(),
-	}, plan.Value.ValueString())
+	got, err := r.write(ctx, plan, esvSecretModel{})
 	if err != nil {
 		resp.Diagnostics.AddError("Create esv secret", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, plan.Name.ValueString(), plan.Value, r.client.Prefix))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, got)...)
 }
 
 func (r *esvSecretResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -143,7 +137,7 @@ func (r *esvSecretResource) Read(ctx context.Context, req resource.ReadRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	got, err := r.client.GetSecret(ctx, secretRemoteName(state, r.client.Prefix))
+	got, err := r.client.GetSecret(ctx, applyESVRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString()))
 	if client.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -162,26 +156,12 @@ func (r *esvSecretResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	remote := secretRemoteName(prior, r.client.Prefix)
-	if plan.Description.ValueString() != prior.Description.ValueString() {
-		if err := r.client.SetSecretDescription(ctx, remote, plan.Description.ValueString()); err != nil {
-			resp.Diagnostics.AddError("Update esv secret description", err.Error())
-			return
-		}
-	}
-	value := plan.Value.ValueString()
-	if !plan.Value.IsNull() && value != "" && value != prior.Value.ValueString() {
-		if _, err := r.client.CreateSecretVersion(ctx, remote, value); err != nil {
-			resp.Diagnostics.AddError("Update esv secret value", err.Error())
-			return
-		}
-	}
-	got, err := r.client.GetSecret(ctx, remote)
+	got, err := r.write(ctx, plan, prior)
 	if err != nil {
-		resp.Diagnostics.AddError("Read esv secret after update", err.Error())
+		resp.Diagnostics.AddError("Update esv secret", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, plan.Name.ValueString(), plan.Value, r.client.Prefix))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, got)...)
 }
 
 func (r *esvSecretResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -190,7 +170,7 @@ func (r *esvSecretResource) Delete(ctx context.Context, req resource.DeleteReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.DeleteSecret(ctx, secretRemoteName(state, r.client.Prefix)); err != nil {
+	if err := r.client.DeleteSecret(ctx, applyESVRemote(state.ID, state.RemoteName, r.client.Prefix, state.Name.ValueString())); err != nil {
 		resp.Diagnostics.AddError("Delete esv secret", err.Error())
 	}
 }
@@ -206,13 +186,36 @@ func (r *esvSecretResource) ImportState(ctx context.Context, req resource.Import
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.StripESV(r.client.Prefix, id))...)
 }
 
-func secretRemoteName(state esvSecretModel, pfx string) string {
-	for _, v := range []types.String{state.ID, state.RemoteName} {
-		if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
-			return v.ValueString()
+func (r *esvSecretResource) write(ctx context.Context, plan, prior esvSecretModel) (esvSecretModel, error) {
+	remote := applyESVRemote(prior.ID, prior.RemoteName, r.client.Prefix, plan.Name.ValueString())
+	if persistedRemote(prior.ID, prior.RemoteName) == "" {
+		got, err := r.client.CreateSecret(ctx, remote, client.Secret{
+			ID:                remote,
+			Description:       plan.Description.ValueString(),
+			Encoding:          plan.Encoding.ValueString(),
+			UseInPlaceholders: plan.UseInPlaceholders.ValueBool(),
+		}, plan.Value.ValueString())
+		if err != nil {
+			return esvSecretModel{}, err
+		}
+		return secretToModel(got, plan.Name.ValueString(), plan.Value, r.client.Prefix), nil
+	}
+	if plan.Description.ValueString() != prior.Description.ValueString() {
+		if err := r.client.SetSecretDescription(ctx, remote, plan.Description.ValueString()); err != nil {
+			return esvSecretModel{}, err
 		}
 	}
-	return prefix.ApplyESV(pfx, state.Name.ValueString())
+	value := plan.Value.ValueString()
+	if !plan.Value.IsNull() && value != "" && value != prior.Value.ValueString() {
+		if _, err := r.client.CreateSecretVersion(ctx, remote, value); err != nil {
+			return esvSecretModel{}, err
+		}
+	}
+	got, err := r.client.GetSecret(ctx, remote)
+	if err != nil {
+		return esvSecretModel{}, err
+	}
+	return secretToModel(got, plan.Name.ValueString(), plan.Value, r.client.Prefix), nil
 }
 
 // secretToModel takes value as a types.String rather than a string because the

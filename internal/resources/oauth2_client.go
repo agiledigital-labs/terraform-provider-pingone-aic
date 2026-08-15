@@ -199,10 +199,12 @@ func (r *oauth2ClientResource) Create(ctx context.Context, req resource.CreateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	realm, _ := tf["_realm"].(string)
-	name, _ := tf["_name"].(string)
-	remote := prefix.Apply(r.client.Prefix, name)
-	r.write(ctx, realm, remote, name, tf, password, &resp.Diagnostics, &resp.State)
+	realm, name, id, decoded, err := r.write(ctx, types.StringNull(), types.StringNull(), tf, password)
+	if err != nil {
+		resp.Diagnostics.AddError("Write oauth2 client", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(setOAuth2State(ctx, &resp.State, realm, name, id, decoded, password)...)
 }
 
 func (r *oauth2ClientResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -237,17 +239,18 @@ func (r *oauth2ClientResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	var priorID, priorRemote, priorName types.String
+	var priorID, priorRemote types.String
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("id"), &priorID)...)
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("remote_name"), &priorRemote)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("name"), &priorName)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	realm, _ := tf["_realm"].(string)
-	name, _ := tf["_name"].(string)
-	remote := oauth2RemoteName(priorID, priorRemote, r.client.Prefix, name)
-	r.write(ctx, realm, remote, name, tf, password, &resp.Diagnostics, &resp.State)
+	realm, name, id, decoded, err := r.write(ctx, priorID, priorRemote, tf, password)
+	if err != nil {
+		resp.Diagnostics.AddError("Write oauth2 client", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(setOAuth2State(ctx, &resp.State, realm, name, id, decoded, password)...)
 }
 
 func (r *oauth2ClientResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -274,7 +277,10 @@ func (r *oauth2ClientResource) ImportState(ctx context.Context, req resource.Imp
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("remote_name"), parts[1])...)
 }
 
-func (r *oauth2ClientResource) write(ctx context.Context, realm, remote, logicalName string, tf map[string]any, password string, diags *diag.Diagnostics, state *tfsdk.State) {
+func (r *oauth2ClientResource) write(ctx context.Context, priorID, priorRemote types.String, tf map[string]any, password string) (realm, logicalName, id string, decoded oauth2client.Values, err error) {
+	realm, _ = tf["_realm"].(string)
+	logicalName, _ = tf["_name"].(string)
+	remote := applyRemote(priorID, priorRemote, r.client.Prefix, logicalName)
 	vals := oauth2client.Values{}
 	for k, v := range tf {
 		if strings.HasPrefix(k, "_") {
@@ -294,33 +300,21 @@ func (r *oauth2ClientResource) write(ctx context.Context, realm, remote, logical
 	}
 	body, err := oauth2client.EncodeAPI(vals, r.client.Prefix)
 	if err != nil {
-		diags.AddError("Encode oauth2 client", err.Error())
-		return
+		return "", "", "", nil, err
 	}
 	raw, err := r.client.PutOAuth2Client(ctx, realm, remote, body)
 	if err != nil {
-		diags.AddError("Write oauth2 client", err.Error())
-		return
+		return "", "", "", nil, err
 	}
-	decoded, err := oauth2client.DecodeAPI(raw, r.client.Prefix)
+	decoded, err = oauth2client.DecodeAPI(raw, r.client.Prefix)
 	if err != nil {
-		diags.AddError("Unmodelled oauth2 client field after write", err.Error())
-		return
+		return "", "", "", nil, err
 	}
-	id, _ := raw["_id"].(string)
+	id, _ = raw["_id"].(string)
 	if id == "" {
 		id = remote
 	}
-	diags.Append(setOAuth2State(ctx, state, realm, logicalName, id, decoded, password)...)
-}
-
-func oauth2RemoteName(id, remote types.String, pfx, logical string) string {
-	for _, v := range []types.String{id, remote} {
-		if !v.IsNull() && !v.IsUnknown() && v.ValueString() != "" {
-			return v.ValueString()
-		}
-	}
-	return prefix.Apply(pfx, logical)
+	return realm, logicalName, id, decoded, nil
 }
 
 func oauth2ValuesFromConfig(ctx context.Context, cfg tfsdk.Plan) (map[string]any, string, diag.Diagnostics) {
