@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"time"
 )
 
 const managedConfigPath = "/openidm/config/managed"
@@ -74,31 +73,21 @@ func (c *Client) replaceManagedConfirmedLocked(ctx context.Context, doc map[stri
 	if len(expect) == 0 {
 		return fmt.Errorf("managed config write requires at least one confirmation condition")
 	}
-	const attempts = 6
-	var last error
-	for i := 0; i < attempts; i++ {
-		if err := c.PutManaged(ctx, doc); err != nil {
-			return err
-		}
-		got, err := c.GetManaged(ctx)
-		if err != nil {
-			return fmt.Errorf("re-read managed after write: %w", err)
-		}
-		if err := confirmManaged(got, expect); err == nil {
-			return nil
-		} else {
-			last = err
-		}
-		if i+1 < attempts {
-			delay := time.Duration(500*(1<<i)) * time.Millisecond
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
+	return c.confirmedWrite(ctx, "managed config write",
+		func() (map[string]any, error) {
+			if err := c.PutManaged(ctx, doc); err != nil {
+				return nil, err
 			}
-		}
-	}
-	return fmt.Errorf("managed config write was accepted but not persisted: %w; see docs/api/99-quirks-and-open-questions.md Q14", last)
+			got, err := c.GetManaged(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("re-read managed after write: %w", err)
+			}
+			return got, nil
+		},
+		func(got map[string]any) error {
+			return confirmManaged(got, expect)
+		},
+	)
 }
 
 func confirmManaged(doc map[string]any, expect []ManagedConfirm) error {

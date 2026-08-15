@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"time"
 )
 
 const accessConfigID = "access"
@@ -122,28 +121,14 @@ func (c *Client) replaceAccessConfirmedLocked(ctx context.Context, doc map[strin
 	if expect.Hash == "" {
 		return fmt.Errorf("access write requires a rule-hash confirmation")
 	}
-	const attempts = 6
-	var last error
-	for i := 0; i < attempts; i++ {
-		got, err := c.PutConfig(ctx, accessConfigID, doc)
-		if err != nil {
-			return err
-		}
-		if err := confirmAccess(got, expect); err == nil {
-			return nil
-		} else {
-			last = err
-		}
-		if i+1 < attempts {
-			delay := time.Duration(500*(1<<i)) * time.Millisecond
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-			}
-		}
-	}
-	return fmt.Errorf("config/access write was accepted but not persisted: %w", last)
+	return c.confirmedWrite(ctx, "config/access write",
+		func() (map[string]any, error) {
+			return c.PutConfig(ctx, accessConfigID, doc)
+		},
+		func(got map[string]any) error {
+			return confirmAccess(got, expect)
+		},
+	)
 }
 
 func confirmAccess(doc map[string]any, expect RuleConfirm) error {

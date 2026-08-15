@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"time"
 )
 
 const authenticationConfigID = "authentication"
@@ -127,28 +126,14 @@ func (c *Client) replaceAuthConfirmedLocked(ctx context.Context, doc map[string]
 	if expect.Hash == "" {
 		return fmt.Errorf("authentication write requires a mapping-hash confirmation")
 	}
-	const attempts = 6
-	var last error
-	for i := 0; i < attempts; i++ {
-		got, err := c.PutConfig(ctx, authenticationConfigID, doc)
-		if err != nil {
-			return err
-		}
-		if err := confirmAuth(got, expect); err == nil {
-			return nil
-		} else {
-			last = err
-		}
-		if i+1 < attempts {
-			delay := time.Duration(500*(1<<i)) * time.Millisecond
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-			}
-		}
-	}
-	return fmt.Errorf("config/authentication write was accepted but not persisted: %w", last)
+	return c.confirmedWrite(ctx, "config/authentication write",
+		func() (map[string]any, error) {
+			return c.PutConfig(ctx, authenticationConfigID, doc)
+		},
+		func(got map[string]any) error {
+			return confirmAuth(got, expect)
+		},
+	)
 }
 
 func confirmAuth(doc map[string]any, expect RuleConfirm) error {

@@ -63,6 +63,10 @@ type Client struct {
 	managedMu sync.Mutex
 	accessMu  sync.Mutex
 	authMu    sync.Mutex
+
+	// confirmDelay, if set, replaces the Q14 retry backoff so tests do
+	// not sleep out the production schedule (~15.5s).
+	confirmDelay func(attempt int) time.Duration
 }
 
 func New(cfg Config) (*Client, error) {
@@ -371,4 +375,45 @@ func StripServerFields(m map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+const confirmedWriteAttempts = 6
+
+// confirmedWrite retries write until confirm accepts the re-read document.
+// A 200 on PUT is not evidence the change is stored (Q14). write is PUT
+// plus that document's re-read — PutConfig already GETs, PutManaged does
+// not — and is not retried on error. The caller holds the document mutex.
+func (c *Client) confirmedWrite(
+	ctx context.Context,
+	what string,
+	write func() (map[string]any, error),
+	confirm func(map[string]any) error,
+) error {
+	var last error
+	for i := 0; i < confirmedWriteAttempts; i++ {
+		got, err := write()
+		if err != nil {
+			return err
+		}
+		if err := confirm(got); err == nil {
+			return nil
+		} else {
+			last = err
+		}
+		if i+1 < confirmedWriteAttempts {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(c.confirmRetryDelay(i)):
+			}
+		}
+	}
+	return fmt.Errorf("%s was accepted but not persisted: %w; see docs/api/99-quirks-and-open-questions.md Q14", what, last)
+}
+
+func (c *Client) confirmRetryDelay(attempt int) time.Duration {
+	if c.confirmDelay != nil {
+		return c.confirmDelay(attempt)
+	}
+	return time.Duration(500*(1<<attempt)) * time.Millisecond
 }
