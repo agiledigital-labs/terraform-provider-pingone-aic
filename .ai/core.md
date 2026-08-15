@@ -13,9 +13,8 @@ An **experimental** Terraform provider (terraform-plugin-framework, Go 1.25) for
 [PingOne Advanced Identity Cloud](https://docs.pingidentity.com/pingoneaic/). It
 manages AM scripts, authentication journeys, the journey node types those trees
 use, OAuth2 clients, ESVs, custom managed-object types, IDM endpoints and
-schedules, individual `config/access` / `config/authentication` rules,
-and IDM internal roles.
-User-facing overview lives in [README.md](../README.md) — don't
+schedules, individual `config/access` / `config/authentication` rules, and IDM
+internal roles. User-facing overview lives in [README.md](../README.md) — don't
 duplicate it here.
 
 ## The one rule that shapes everything
@@ -31,21 +30,21 @@ unrecognised key.
 
 ## Layout
 
-| Path                  | What lives there                                                                          |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `main.go`             | provider plugin entrypoint (`registry.terraform.io/agiledigital-labs/pingone-aic`)        |
-| `cmd/generate/`       | `pingoneaic-tf` CLI — pulls live tenant config into reviewable HCL                        |
-| `internal/provider/`  | provider schema, config resolution, resource registration                                 |
-| `internal/resources/` | `script.go`, `journey.go`, `oauth2_client.go`, `node.go`, `idm_endpoint.go`, `idm_schedule.go`, `access_rule.go`, `authentication_mapping.go`, `internal_role.go` (node resources are one generic type driven by each catalog `Spec`) |
-| `internal/nodetype/`  | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                |
-| `internal/oauth2client/` | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                             |
-| `internal/managedobject/` | typed decode/encode for one custom managed-object type (relationships remapped)                              |
-| `internal/client/`    | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients, ESVs, IDM config                               |
-| `internal/amjson/`    | coercions for AM's loosely-typed JSON, shared by resources and generate                   |
-| `internal/prefix/`    | `resource_prefix` apply/strip helpers                                                     |
-| `internal/testutil/`  | test-only helpers (fake HTTP transport); imported from `_test.go` only                    |
-| `examples/`           | hand-written HCL showing the intended shape                                               |
-| `generated/`          | local experiment output — **gitignored**, not a source artefact                           |
+| Path                      | What lives there                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.go`                 | provider plugin entrypoint (`registry.terraform.io/agiledigital-labs/pingone-aic`)                                                                                                                                                                                                                                                                                                |
+| `cmd/generate/`           | `pingoneaic-tf` CLI — pulls live tenant config into reviewable HCL                                                                                                                                                                                                                                                                                                                |
+| `internal/provider/`      | provider schema, config resolution, resource registration                                                                                                                                                                                                                                                                                                                         |
+| `internal/resources/`     | one file per resource: `script.go`, `journey.go`, `node.go`, `oauth2_client.go`, `esv_variable.go`, `esv_secret.go`, `managed_object.go`, `idm_endpoint.go`, `idm_schedule.go`, `access_rule.go`, `authentication_mapping.go`, `internal_role.go`, plus `hashed.go` (content-hash RMW shared by the last two). Node resources are one generic type driven by each catalog `Spec`. |
+| `internal/nodetype/`      | **the node catalog** — typed field specs for all 34 node types, plus encode/decode                                                                                                                                                                                                                                                                                                |
+| `internal/oauth2client/`  | **the OAuth2 client catalog** — 115 typed fields in six groups, plus encode/decode                                                                                                                                                                                                                                                                                                |
+| `internal/managedobject/` | typed decode/encode for one custom managed-object type (relationships remapped)                                                                                                                                                                                                                                                                                                   |
+| `internal/client/`        | thin AIC HTTP client: auth, trees, nodes, scripts, OAuth2 clients, ESVs, IDM config                                                                                                                                                                                                                                                                                               |
+| `internal/amjson/`        | coercions for AM's loosely-typed JSON, shared by resources and generate                                                                                                                                                                                                                                                                                                           |
+| `internal/prefix/`        | `resource_prefix` apply/strip helpers                                                                                                                                                                                                                                                                                                                                             |
+| `internal/testutil/`      | test-only helpers (fake HTTP transport); imported from `_test.go` only                                                                                                                                                                                                                                                                                                            |
+| `examples/`               | hand-written HCL showing the intended shape                                                                                                                                                                                                                                                                                                                                       |
+| `generated/`              | local experiment output — **gitignored**, not a source artefact                                                                                                                                                                                                                                                                                                                   |
 
 Node resources aren't hand-written per type: `provider.Resources()` loops
 `nodetype.All()` and builds a `nodeResource` from each `Spec`. Adding a node
@@ -143,13 +142,14 @@ is not in the realm).
 `-out` is **owned** by the tool: each run deletes the previous run's
 `provider.tf`, `scripts.tf`, `oauth2_clients.tf`, `esv_*.tf`,
 `managed_objects.tf`, `idm_endpoints.tf`, `idm_schedules.tf`,
-`access_rules.tf.review`, `authentication_mappings.tf.review`, `internal_roles.tf`, `journey_*.tf`,
-`scripts/*.js`, `endpoints/*.js`, `schedules/*.js` and `hooks/*.js` so deleted
-objects don't linger. It writes a `.pingoneaic-generated` marker to claim the
-directory and refuses to delete anything in a directory that lacks the marker
-but holds matching files — that guard is what stops `-out examples` eating
-hand-written config. Progress goes to `Options.Progress` (stderr from the CLI);
-`SIGINT`/`SIGTERM` cancel the run through the context.
+`access_rules.tf.review`, `authentication_mappings.tf.review`,
+`internal_roles.tf`, `journey_*.tf`, `scripts/*.js`, `endpoints/*.js`,
+`schedules/*.js` and `hooks/*.js` so deleted objects don't linger. It writes a
+`.pingoneaic-generated` marker to claim the directory and refuses to delete
+anything in a directory that lacks the marker but holds matching files — that
+guard is what stops `-out examples` eating hand-written config. Progress goes to
+`Options.Progress` (stderr from the CLI); `SIGINT`/`SIGTERM` cancel the run
+through the context.
 
 ## Conventions that bite if you miss them
 
@@ -191,11 +191,12 @@ skips default-valued fields (`EqualDefault`) so emitted HCL stays reviewable.
 **Scripts.** `source` is plaintext in HCL; the client base64-encodes on the
 wire. Prefer `source = file("${path.module}/scripts/foo.js")` over an inline
 string — generate emits that form. The same `file()` link works for IDM
-endpoint, schedule, and managed-object hook `source`. The `file` *attribute*
-on those resources is an IDM product path, not a local file. Always send `evaluator_version` (`2.0` default) — omitting it creates a
-legacy v1 engine script. `SCRIPTED_DECISION_NODE` is accepted on write but AM
-stores `AUTHENTICATION_TREE_DECISION_NODE`; re-read after create rather than
-trusting the request form (`client.CanonicalContext`).
+endpoint, schedule, and managed-object hook `source`. The `file` _attribute_ on
+those resources is an IDM product path, not a local file. Always send
+`evaluator_version` (`2.0` default) — omitting it creates a legacy v1 engine
+script. `SCRIPTED_DECISION_NODE` is accepted on write but AM stores
+`AUTHENTICATION_TREE_DECISION_NODE`; re-read after create rather than trusting
+the request form (`client.CanonicalContext`).
 
 **Auth.** Either a pre-minted `access_token` (takes precedence) or a
 service-account JWT (`service_account_id` + RSA private `jwk`, minted against
@@ -209,24 +210,42 @@ it.
 
 **`realm`** is `RequiresReplace` on every resource.
 
-## Adding a node type or field
+## Adding a field
 
-1. Add or extend the `Spec` in `internal/nodetype/catalog.go`. Use the `f()` /
-   `req()` helpers so `TFName` derives from `APIName` via `snakeFromCamel`.
-2. Add a test in `catalog_test.go` — the existing ones cover the patterns worth
-   copying (unknown-field rejection, ESV round-trip, prefix handling, default
-   fill).
-3. Verify field names and defaults against a live tenant or the node schema
-   endpoints (`client.NodeSchema` / `NodeTemplate`) — not from memory.
-4. **Write the finding back into `pingone-aic-manager/docs/api/09-journeys.md`**
-   — see
-   [Feed what you learn back](#feed-what-you-learn-back-into-that-doc-set). A
-   catalog gap means the API surface was documented incompletely; fixing only
-   the catalog leaves the next person to rediscover it.
+AIC grows a field; the catalog rejects it; you have to teach the provider about
+it. **Where** depends on which surface it belongs to — there are three answers,
+and only the first is a one-line edit:
 
-The resource, its Terraform schema, and generate support all follow from the
-`Spec`. No other file should need touching _in this repo_ — but step 4 is not
-optional.
+| The field is on…                             | Edit                                                                                                                                                                                                 | Cost     |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| a journey **node type**                      | `internal/nodetype/catalog.go` + `catalog_test.go`                                                                                                                                                   | 1 site   |
+| an **OAuth2 client**                         | `internal/oauth2client/catalog.go` + `catalog_test.go`                                                                                                                                               | 1 site   |
+| a **custom managed object**                  | `internal/managedobject/codec.go` + `codec_test.go`                                                                                                                                                  | 1 site   |
+| an **IDM** endpoint / schedule / role / rule | `internal/client/idm_*.go` (key set, struct, `Encode*`, `Decode*`) **and** `internal/resources/<same>.go` (model, schema, `modelTo*`, `*ToModel`) **and** `internal/generate/generate_idm.go` (emit) | ~8 sites |
+
+The first three are catalogs: the Terraform schema, both codecs and generate
+support all follow from the `Spec`, so no other file should need touching. The
+IDM row is not a catalog yet and each field costs those eight parallel edits —
+if you find yourself adding a fourth IDM resource, generalise
+`oauth2client.Spec` first rather than paying it again.
+
+Whichever row you are in:
+
+1. Use the `f()` / `req()` helpers where a catalog offers them, so `TFName`
+   derives from `APIName` via `snakeFromCamel`.
+2. **Add a test.** The existing catalog tests cover the patterns worth copying:
+   unknown-field rejection, ESV round-trip, prefix handling, default fill. For
+   an IDM field, the fixture round-trip sweep in `internal/client/idm_test.go`
+   is what proves the key survives decode _and_ encode.
+3. Verify field names and defaults against a live tenant or the schema endpoints
+   (`client.NodeSchema` / `NodeTemplate` for nodes) — not from memory.
+4. **Write the finding back into `pingone-aic-manager/docs/api/`** — see
+   [Feed what you learn back](#feed-what-you-learn-back-into-that-doc-set).
+   `09-journeys.md` for nodes, `05-oauth2-oidc.md` for clients,
+   `10-managed-objects.md`, `11-idm-endpoints.md`, `18-internal-roles.md`,
+   `19-config-access.md`, `20-config-authentication.md` for the rest. A catalog
+   gap means the API surface was documented incompletely; fixing only the
+   catalog leaves the next person to rediscover it. Step 4 is not optional.
 
 ## Reference material — read this before touching the wire format
 
@@ -242,22 +261,22 @@ notes; they are the reason it works.
 
 Most relevant here:
 
-| File                              | Why you'd open it                               |
-| --------------------------------- | ----------------------------------------------- |
-| `00-auth.md`                      | service-account JWT bearer grant, token caching |
-| `01-realms-and-paths.md`          | realm path composition                          |
-| `02-headers-and-versioning.md`    | `Accept-API-Version` cheat sheet                |
-| `03-esvs.md`                      | ESV ids, restart, `_pageSize` max 100           |
-| `04-scripts.md`                   | script contexts, base64 body, no `_rev`         |
+| File                              | Why you'd open it                                                     |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `00-auth.md`                      | service-account JWT bearer grant, token caching                       |
+| `01-realms-and-paths.md`          | realm path composition                                                |
+| `02-headers-and-versioning.md`    | `Accept-API-Version` cheat sheet                                      |
+| `03-esvs.md`                      | ESV ids, restart, `_pageSize` max 100                                 |
+| `04-scripts.md`                   | script contexts, base64 body, no `_rev`                               |
 | `05-oauth2-oidc.md`               | OAuth2 clients, inherited wrappers, `*-encrypted` strip, protocol=2.1 |
-| `09-journeys.md`                  | auth trees, nodes, custom nodes                 |
-| `10-managed-objects.md`           | `config/managed` whole-doc RMW, Q14 lost updates |
-| `11-idm-endpoints.md`             | IDM endpoints + schedules; no Accept-API-Version |
-| `18-internal-roles.md`            | role `_id` vs `name`; access vs auth `roles` shapes |
-| `19-config-access.md`             | `config/access` whole-doc RMW, no `_rev`, disjunction |
-| `20-config-authentication.md`     | `config/authentication` `rsFilter.staticUserMapping` |
-| `13-script-contexts.md`           | authoritative per-context binding metadata      |
-| `99-quirks-and-open-questions.md` | cross-cutting weirdness worth a skim            |
+| `09-journeys.md`                  | auth trees, nodes, custom nodes                                       |
+| `10-managed-objects.md`           | `config/managed` whole-doc RMW, Q14 lost updates                      |
+| `11-idm-endpoints.md`             | IDM endpoints + schedules; no Accept-API-Version                      |
+| `18-internal-roles.md`            | role `_id` vs `name`; access vs auth `roles` shapes                   |
+| `19-config-access.md`             | `config/access` whole-doc RMW, no `_rev`, disjunction                 |
+| `20-config-authentication.md`     | `config/authentication` `rsFilter.staticUserMapping`                  |
+| `13-script-contexts.md`           | authoritative per-context binding metadata                            |
+| `99-quirks-and-open-questions.md` | cross-cutting weirdness worth a skim                                  |
 
 The rest of the set (SAML, secret mappings, sync mappings, …) covers areas that
 are [out of scope](#scope) for this provider — useful background, not current
@@ -316,46 +335,46 @@ shapes from memory.
 In scope: scripts, journeys, journey nodes, OAuth2 clients, ESVs (variables and
 secrets), custom managed-object types (including lifecycle hook blocks), IDM
 endpoints and schedules, **individual** `config/access` rules /
-`config/authentication` `staticUserMapping` entries, and IDM internal roles. Explicitly
-**out** of scope until that path is proven: SAML, secret mappings, the
-realm-wide OIDC provider service, Ping-shipped managed objects
-(`alpha_user`, …) themselves, and the rest of `rsFilter`
-(`subjectMapping`, `anonymousUserMapping`, scopes, client credentials).
-Lifecycle hooks are `hook` blocks on
-`pingoneaic_managed_object` (custom types only) — never written onto
+`config/authentication` `staticUserMapping` entries, and IDM internal roles.
+Explicitly **out** of scope until that path is proven: SAML, secret mappings,
+the realm-wide OIDC provider service, Ping-shipped managed objects
+(`alpha_user`, …) themselves, and the rest of `rsFilter` (`subjectMapping`,
+`anonymousUserMapping`, scopes, client credentials). Lifecycle hooks are `hook`
+blocks on `pingoneaic_managed_object` (custom types only) — never written onto
 `alpha_user`.
 
 IDM config (`/openidm/config/…`) must **not** send `Accept-API-Version`.
 Schedule copies default to `enabled = false` so they cannot fire.
 
 **Access and authentication rules have no server id.** Terraform stores a
-SHA-256 of the rule's canonical JSON (sorted keys, compact separators — the
-same digest `aic access list` prints) as `id`. Create appends; update
-replaces the first live entry whose hash matches the prior `id`; delete
-removes that one copy. A rule whose hash already exists is refused on create
-(import it). Other entries in the document are never decoded or re-encoded.
-`resource_prefix` does not apply — there is no name to prefix, and applying
-generated copies would append duplicate grants. Generate therefore writes
-`.tf.review` files, not applyable `.tf`.
+SHA-256 of the rule's canonical JSON (sorted keys, compact separators — the same
+digest `aic access list` prints) as `id`. Create appends; update replaces the
+first live entry whose hash matches the prior `id`; delete removes that one
+copy. A rule whose hash already exists is refused on create (import it). Other
+entries in the document are never decoded or re-encoded. `resource_prefix` does
+not apply — there is no name to prefix, and applying generated copies would
+append duplicate grants. Generate therefore writes `.tf.review` files, not
+applyable `.tf`.
 
-**Internal roles are keyed by a chosen `_id`.** `PUT /openidm/internal/role/{id}`
-creates with that id (the console's POST path yields a random UUID). Access
-rules must reference `internal/role/{_id}`, never the role `name`. PUT is a
-destructive replace — always send `privileges` (empty list is fine). Updates
-re-GET and send `If-Match: <_rev>`. Strip `temporalConstraints` (even `[]` is
-rejected). `Accept-API-Version: resource=1.0`. Privilege `accessFlags` uses
-that spelling, not the schema's `accessflags`. A non-VIEW permission needs at
-least one `read_only = false` flag.
+**Internal roles are keyed by a chosen `_id`.**
+`PUT /openidm/internal/role/{id}` creates with that id (the console's POST path
+yields a random UUID). Access rules must reference `internal/role/{_id}`, never
+the role `name`. PUT is a destructive replace — always send `privileges` (empty
+list is fine). Updates re-GET and send `If-Match: <_rev>`. Strip
+`temporalConstraints` (even `[]` is rejected).
+`Accept-API-Version: resource=1.0`. Privilege `accessFlags` uses that spelling,
+not the schema's `accessflags`. A non-VIEW permission needs at least one
+`read_only = false` flag.
 
 **Managed config writes are not read-your-writes.** `ReplaceManagedConfirmed`
-re-reads until the new type is visible. Never PUT a document that was not
-just read — other types in `objects[]` must be preserved.
+re-reads until the new type is visible. Never PUT a document that was not just
+read — other types in `objects[]` must be preserved.
 
 **ESV ids cannot take `Terraform_` as a prefix.** AIC requires
 `^esv-[a-z0-9_-]{1,124}$`. `prefix.ApplyESV` lowercases the provider prefix,
-turns underscores into hyphens, and inserts it after `esv-`
-(`esv-test11` → `esv-terraform-test11`). **Never restart the tenant from apply.**
-`loaded` is computed; a write leaves the ESV pending until an operator restarts.
+turns underscores into hyphens, and inserts it after `esv-` (`esv-test11` →
+`esv-terraform-test11`). **Never restart the tenant from apply.** `loaded` is
+computed; a write leaves the ESV pending until an operator restarts.
 
 ## Secrets
 

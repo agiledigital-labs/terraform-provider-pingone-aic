@@ -45,12 +45,12 @@ not hardcoded UUIDs.
 | `pingoneaic_esv_variable`           | `/environment/variables/{id}`                      |
 | `pingoneaic_esv_secret`             | `/environment/secrets/{id}`                        |
 | `pingoneaic_managed_object`         | one type in `/openidm/config/managed`              |
-| `pingoneaic_idm_endpoint`             | `/openidm/config/endpoint/{name}`                          |
-| `pingoneaic_idm_schedule`             | `/openidm/config/schedule/{name}`                          |
-| `pingoneaic_access_rule`              | one `configs[]` grant in `/openidm/config/access`          |
-| `pingoneaic_authentication_mapping`   | one `rsFilter.staticUserMapping[]` entry                   |
-| `pingoneaic_internal_role`            | `/openidm/internal/role/{id}`                              |
-| `pingoneaic_<type>_node`              | every other node type used by the generate catalog         |
+| `pingoneaic_idm_endpoint`           | `/openidm/config/endpoint/{name}`                  |
+| `pingoneaic_idm_schedule`           | `/openidm/config/schedule/{name}`                  |
+| `pingoneaic_access_rule`            | one `configs[]` grant in `/openidm/config/access`  |
+| `pingoneaic_authentication_mapping` | one `rsFilter.staticUserMapping[]` entry           |
+| `pingoneaic_internal_role`          | `/openidm/internal/role/{id}`                      |
+| `pingoneaic_<type>_node`            | every other node type used by the generate catalog |
 
 `success` and `failure` are valid connection targets (AM's built-in static
 nodes). `x` / `y` are optional visual chrome and are omitted from generated HCL.
