@@ -82,9 +82,17 @@ func (r *esvSecretResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				PlanModifiers:       []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
 			},
 			"value": schema.StringAttribute{
-				Optional:            true,
-				Sensitive:           true,
+				Optional:  true,
+				Computed:  true,
+				Sensitive: true,
+				// Computed, not plain Optional: AIC never returns the value, so state
+				// is the only copy. Dropping `value` from config once the secret is set
+				// is the obvious move, and for a plain Optional attribute that makes the
+				// planned value null while state still holds the secret — which apply
+				// rejects as an inconsistent result. UseStateForUnknown keeps the
+				// recorded value instead of forcing a new version on every plan.
 				MarkdownDescription: "Plaintext secret. Required on create. Changing it posts a new version. Never read back from AIC.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"loaded":         schema.BoolAttribute{Computed: true},
 			"active_version": schema.StringAttribute{Computed: true},
@@ -126,7 +134,7 @@ func (r *esvSecretResource) Create(ctx context.Context, req resource.CreateReque
 		resp.Diagnostics.AddError("Create esv secret", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, plan.Name.ValueString(), plan.Value.ValueString(), r.client.Prefix))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, plan.Name.ValueString(), plan.Value, r.client.Prefix))...)
 }
 
 func (r *esvSecretResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -144,7 +152,7 @@ func (r *esvSecretResource) Read(ctx context.Context, req resource.ReadRequest, 
 		resp.Diagnostics.AddError("Read esv secret", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, state.Name.ValueString(), state.Value.ValueString(), r.client.Prefix))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, state.Name.ValueString(), state.Value, r.client.Prefix))...)
 }
 
 func (r *esvSecretResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -173,10 +181,7 @@ func (r *esvSecretResource) Update(ctx context.Context, req resource.UpdateReque
 		resp.Diagnostics.AddError("Read esv secret after update", err.Error())
 		return
 	}
-	if value == "" {
-		value = prior.Value.ValueString()
-	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, plan.Name.ValueString(), value, r.client.Prefix))...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, secretToModel(got, plan.Name.ValueString(), plan.Value, r.client.Prefix))...)
 }
 
 func (r *esvSecretResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -210,7 +215,10 @@ func secretRemoteName(state esvSecretModel, pfx string) string {
 	return prefix.ApplyESV(pfx, state.Name.ValueString())
 }
 
-func secretToModel(s *client.Secret, logical, value, pfx string) esvSecretModel {
+// secretToModel takes value as a types.String rather than a string because the
+// written-back value has to equal the planned one exactly — collapsing null and
+// "" here is what makes apply report an inconsistent result.
+func secretToModel(s *client.Secret, logical string, value types.String, pfx string) esvSecretModel {
 	name := logical
 	if name == "" {
 		name = prefix.StripESV(pfx, s.ID)
@@ -219,9 +227,9 @@ func secretToModel(s *client.Secret, logical, value, pfx string) esvSecretModel 
 	if s.Description != "" {
 		desc = types.StringValue(s.Description)
 	}
-	val := types.StringNull()
-	if value != "" {
-		val = types.StringValue(value)
+	val := value
+	if val.IsUnknown() {
+		val = types.StringNull()
 	}
 	return esvSecretModel{
 		ID:                types.StringValue(s.ID),

@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"context"
 	"testing"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
@@ -25,7 +26,7 @@ func TestRoleToModelKeepsDistinctDisplayName(t *testing.T) {
 }
 
 func TestModelToRoleUsesRemoteIDAsNameWhenDisplayOmitted(t *testing.T) {
-	got, err := modelToRole(internalRoleModel{
+	got, err := modelToRole(context.Background(), internalRoleModel{
 		Name: types.StringValue("probe"),
 		Privileges: []rolePrivilegeModel{{
 			Name:        types.StringValue("n"),
@@ -44,7 +45,7 @@ func TestModelToRoleUsesRemoteIDAsNameWhenDisplayOmitted(t *testing.T) {
 }
 
 func TestModelToRoleRejectsUpdateWithoutWritableFlag(t *testing.T) {
-	_, err := modelToRole(internalRoleModel{
+	_, err := modelToRole(context.Background(), internalRoleModel{
 		Name: types.StringValue("probe"),
 		Privileges: []rolePrivilegeModel{{
 			Name:        types.StringValue("n"),

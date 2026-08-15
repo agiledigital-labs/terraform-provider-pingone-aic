@@ -126,7 +126,7 @@ func (r *internalRoleResource) Create(ctx context.Context, req resource.CreateRe
 		resp.Diagnostics.AddError("Create internal role", err.Error())
 		return
 	}
-	role, err := modelToRole(plan, remote)
+	role, err := modelToRole(ctx, plan, remote)
 	if err != nil {
 		resp.Diagnostics.AddError("Create internal role", err.Error())
 		return
@@ -171,7 +171,7 @@ func (r *internalRoleResource) Update(ctx context.Context, req resource.UpdateRe
 		resp.Diagnostics.AddError("Update internal role", err.Error())
 		return
 	}
-	role, err := modelToRole(plan, remote)
+	role, err := modelToRole(ctx, plan, remote)
 	if err != nil {
 		resp.Diagnostics.AddError("Update internal role", err.Error())
 		return
@@ -208,7 +208,7 @@ func (r *internalRoleResource) ImportState(ctx context.Context, req resource.Imp
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), prefix.Strip(r.client.Prefix, id))...)
 }
 
-func modelToRole(plan internalRoleModel, remote string) (client.Role, error) {
+func modelToRole(ctx context.Context, plan internalRoleModel, remote string) (client.Role, error) {
 	display := plan.DisplayName.ValueString()
 	if display == "" {
 		display = remote
@@ -219,11 +219,19 @@ func modelToRole(plan internalRoleModel, remote string) (client.Role, error) {
 		Condition:   plan.Condition.ValueString(),
 	}
 	for _, p := range plan.Privileges {
+		actions, err := setStrings(ctx, p.Actions)
+		if err != nil {
+			return client.Role{}, fmt.Errorf("privilege %q actions: %w", p.Name.ValueString(), err)
+		}
+		permissions, err := setStrings(ctx, p.Permissions)
+		if err != nil {
+			return client.Role{}, fmt.Errorf("privilege %q permissions: %w", p.Name.ValueString(), err)
+		}
 		priv := client.Privilege{
 			Name:        p.Name.ValueString(),
 			Path:        p.Path.ValueString(),
-			Actions:     setStrings(p.Actions),
-			Permissions: setStrings(p.Permissions),
+			Actions:     actions,
+			Permissions: permissions,
 			Filter:      p.Filter.ValueString(),
 		}
 		for _, f := range p.AccessFlags {
@@ -276,6 +284,9 @@ func roleToModel(r *client.Role, logical, remote string) internalRoleModel {
 	return m
 }
 
+// stringSetValue cannot fail: every element is constructed as types.String
+// immediately below, matching the declared element type, and `actions` /
+// `permissions` are Required so an empty set is the correct zero — never null.
 func stringSetValue(items []string) types.Set {
 	els := make([]attr.Value, len(items))
 	for i, s := range items {
@@ -284,11 +295,14 @@ func stringSetValue(items []string) types.Set {
 	return types.SetValueMust(types.StringType, els)
 }
 
-func setStrings(v types.Set) []string {
+func setStrings(ctx context.Context, v types.Set) ([]string, error) {
 	if v.IsNull() || v.IsUnknown() {
-		return nil
+		return nil, nil
 	}
 	var out []string
-	_ = v.ElementsAs(context.Background(), &out, false)
-	return out
+	if diags := v.ElementsAs(ctx, &out, false); diags.HasError() {
+		d := diags.Errors()[0]
+		return nil, fmt.Errorf("%s: %s", d.Summary(), d.Detail())
+	}
+	return out, nil
 }
