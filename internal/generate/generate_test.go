@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -12,11 +13,16 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
+	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/managedobject"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/oauth2client"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/testutil"
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"golang.org/x/text/unicode/norm"
 )
 
 func TestSanitizeIdent(t *testing.T) {
@@ -39,6 +45,75 @@ func TestHclFileIsModuleRelative(t *testing.T) {
 	if got != `file("${path.module}/hooks/probe.onCreate.js")` {
 		t.Fatalf("got %s", got)
 	}
+}
+
+// Hostile tenant strings that now flow through hclString: JS expressions,
+// query filters, plaintext ESV values, descriptions. Seeds the fuzz too.
+var hclStringCases = []string{
+	`${x}`,
+	`%{if true}`,
+	`%{if true}yes%{endif}`,
+	`$${literal}`,
+	`ownDataOnly() && ${x}`,
+	`say "hi"`,
+	`path\file`,
+	"line1\nline2",
+	"über",
+	`${"foo"}`,
+	`$$${x}`,
+	`${`,
+	`%{`,
+	"",
+	"\x01",
+	"\a",
+}
+
+func hclStringRoundTrip(s string) error {
+	src := "x = " + hclString(s)
+	f, diags := hclsyntax.ParseConfig([]byte(src), "", hcl.InitialPos)
+	if diags.HasErrors() {
+		return fmt.Errorf("parse %s: %s", src, diags.Error())
+	}
+	attrs, diags := f.Body.JustAttributes()
+	if diags.HasErrors() {
+		return fmt.Errorf("attrs %s: %s", src, diags.Error())
+	}
+	attr, ok := attrs["x"]
+	if !ok {
+		return fmt.Errorf("missing attribute x in %s", src)
+	}
+	val, diags := attr.Expr.Value(nil)
+	if diags.HasErrors() {
+		return fmt.Errorf("eval %s: %s", src, diags.Error())
+	}
+	if got := val.AsString(); got != s {
+		return fmt.Errorf("hclString(%q) evaluated to %q (emitted %s)", s, got, src)
+	}
+	return nil
+}
+
+func TestHclStringRoundTrips(t *testing.T) {
+	for _, s := range hclStringCases {
+		if err := hclStringRoundTrip(s); err != nil {
+			t.Errorf("%q: %v", s, err)
+		}
+	}
+}
+
+func FuzzHclStringRoundTrip(f *testing.F) {
+	for _, s := range hclStringCases {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		// HCL is Unicode and evaluates string values as NFC. Generate only
+		// ever sees JSON-decoded strings; skip the cases HCL cannot echo.
+		if !utf8.ValidString(s) || !norm.NFC.IsNormalString(s) {
+			t.Skip()
+		}
+		if err := hclStringRoundTrip(s); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func TestSelectJourneysRejectsMissingNames(t *testing.T) {
@@ -77,7 +152,7 @@ func seedDir(t *testing.T, dir string, names ...string) {
 
 func TestCleanGeneratedFilesRemovesOnlyOurOutput(t *testing.T) {
 	dir := t.TempDir()
-	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "esv_variables.tf", "esv_secrets.tf", "managed_objects.tf", "idm_endpoints.tf", "idm_schedules.tf", "access_rules.tf.review", "authentication_mappings.tf.review", "internal_roles.tf", "journey_old.tf", filepath.Join("scripts", "old.js"), filepath.Join("hooks", "old.onCreate.js")}
+	generated := []string{"provider.tf", "scripts.tf", "oauth2_clients.tf", "esv_variables.tf", "esv_secrets.tf", "managed_objects.tf", "idm_endpoints.tf", "idm_schedules.tf", "access_rules.tf.review", "authentication_mappings.tf.review", "internal_roles.tf", "journey_old.tf", filepath.Join("scripts", "old.js"), filepath.Join("endpoints", "old.js"), filepath.Join("schedules", "old.js"), filepath.Join("hooks", "old.onCreate.js")}
 	seedDir(t, dir, append(generated, "notes.md", generatedMarker)...)
 
 	if err := cleanGeneratedFiles(dir); err != nil {
@@ -129,6 +204,77 @@ func TestWriteMarkerMakesDirectoryCleanable(t *testing.T) {
 	seedDir(t, dir, "journey_partial.tf")
 	if err := cleanGeneratedFiles(dir); err != nil {
 		t.Fatalf("marked directory should be cleanable: %v", err)
+	}
+}
+
+func TestWriteMarkerListsGeneratedOutputs(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeMarker(dir); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, generatedMarker))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(body)
+	for _, rel := range generatedOutputs {
+		if !strings.Contains(s, rel) {
+			t.Errorf("marker omits %q:\n%s", rel, s)
+		}
+	}
+}
+
+// Writers append to g.files (surfaced as Result.Files). A forgotten
+// generatedOutputs entry would leave that path undeleted on the next run.
+func TestWriterFilesAreCoveredByGeneratedPaths(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := &client.Script{
+		Name: "probe", Context: "AUTHENTICATION_TREE_DECISION_NODE", Source: "true;",
+	}
+	g := &gen{
+		opt:          Options{OutDir: dir, Realm: "alpha"},
+		scripts:      map[string]*client.Script{"sid": script},
+		scriptLabels: map[string]string{"sid": "probe"},
+		journeys:     []emittedJourney{{Name: "Login"}},
+		oauth2:       []emittedOAuth2Client{{Name: "app", Label: "app", Values: oauth2client.Values{}}},
+		variables:    []emittedVariable{{Name: "esv-x", Label: "esv_x", Var: client.Variable{Value: "v"}}},
+		secrets:      []emittedSecret{{Name: "esv-s", Label: "esv_s", Sec: client.Secret{UseInPlaceholders: true}}},
+		managed: []emittedManaged{{
+			Name: "probe", Label: "probe",
+			Obj: managedobject.Object{Hooks: []managedobject.Hook{{Event: "onCreate", Source: "true;"}}},
+		}},
+		endpoints:    []emittedEndpoint{{Name: "ep", Label: "ep", EP: client.Endpoint{Source: "true;"}}},
+		schedules:    []emittedSchedule{{Name: "sch", Label: "sch", Sched: client.Schedule{InvokeService: "script", Source: "true;"}}},
+		accessRules:  []emittedAccessRule{{Label: "info", Hash: "ab", Copies: 1, Indices: []int{0}, Rule: client.AccessRule{Pattern: "info/*", Roles: "*", Methods: "read"}}},
+		authMappings: []emittedAuthMapping{{Label: "amadmin", Hash: "cd", Mapping: client.AuthMapping{Subject: "amadmin", LocalUser: "internal/user/openidm-admin"}}},
+		roles:        []emittedRole{{Name: "role", Label: "role", Role: client.Role{ID: "role"}}},
+	}
+	for _, fn := range []func() error{
+		g.writeProvider, g.writeScripts, g.writeJourneys, g.writeOAuth2Clients,
+		g.writeESVs, g.writeManaged, g.writeIDM, g.writeAccess, g.writeRoles,
+	} {
+		if err := fn(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(g.files) == 0 {
+		t.Fatal("writers produced no files")
+	}
+	covered, err := generatedPaths(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make(map[string]struct{}, len(covered))
+	for _, p := range covered {
+		got[p] = struct{}{}
+	}
+	for _, p := range g.files {
+		if _, ok := got[p]; !ok {
+			t.Errorf("writer produced %q, not matched by generatedPaths", p)
+		}
 	}
 }
 
