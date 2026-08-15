@@ -80,7 +80,8 @@ make tidy          # go mod tidy
 
 ## Gates
 
-`gofmt -l .` (must be empty), `go vet ./...`, `go build ./...`, `go test ./...`,
+`gofmt -l .` (must be empty), `go mod tidy` (must leave `go.mod`/`go.sum`
+unchanged), `go vet ./...`, `go build ./...`, `go test ./...`,
 `golangci-lint run ./...`.
 
 Three places run them, deliberately staged by cost:
@@ -88,7 +89,7 @@ Three places run them, deliberately staged by cost:
 | When                   | What runs                                       | Where                        |
 | ---------------------- | ----------------------------------------------- | ---------------------------- |
 | every commit           | gofmt on **staged** Go files + secret scan      | `.githooks/pre-commit`       |
-| every push             | gofmt, build, vet, test, lint on the whole tree | `.githooks/pre-push`         |
+| every push             | gofmt, tidy, build, vet, test, lint on the whole tree | `.githooks/pre-push`   |
 | every branch push + PR | the same, via `nix develop .#ci`                | `.github/workflows/test.yml` |
 
 Hooks install themselves when you enter `nix develop` (it sets
@@ -106,8 +107,12 @@ in anything committed.
 both shells — it is free software with a cached build, unlike terraform).
 `.golangci.yml` carries the enabled set and, more importantly, the reasoning for
 every check that is off: golangci-lint's standard set plus `dupl`, `errorlint`,
-`gocritic` and `unparam`. Those four were chosen against the defect classes this
-repo has actually shipped — see the findings log in `REVIEW.md`.
+`gocritic`, `unparam`, `bodyclose`, `nilerr` and `noctx`. Each was chosen
+against a defect class this repo has actually shipped, or against the shape of
+the HTTP client — see the findings log in `REVIEW.md`.
+
+`go mod tidy` is a gate because nothing else catches a directly imported module
+still marked `// indirect`: gofmt, vet, build, test and lint all pass on one.
 
 The tree is clean, so **any new finding is yours**. Prefer one central decision
 in `.golangci.yml` over scattered suppressions: a spread of `//nolint` means

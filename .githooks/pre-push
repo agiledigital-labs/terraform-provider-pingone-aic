@@ -19,6 +19,16 @@ if [ -n "$unformatted" ]; then
 	exit 1
 fi
 
+# A directly imported module left marked `// indirect` passes every other
+# gate here — build, vet, test and lint are all happy. Only tidy notices.
+echo "pre-push: go mod tidy"
+go mod tidy
+if ! git diff --quiet -- go.mod go.sum; then
+	git diff --stat -- go.mod go.sum | sed 's/^/  /' >&2
+	echo "  go.mod/go.sum are not tidy — commit the result of 'make tidy'" >&2
+	exit 1
+fi
+
 echo "pre-push: go build"
 go build ./...
 

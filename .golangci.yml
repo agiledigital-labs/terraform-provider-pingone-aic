@@ -22,6 +22,17 @@ linters:
     - errorlint
     - gocritic
     - unparam
+    # The three below were probed at 0 findings on 2026-08-15 and enabled then:
+    # free today, and the surface they cover roughly doubled in the preceding
+    # twelve commits (four new client surfaces, six new request paths).
+    # A leaked response body holds a connection until GC.
+    - bodyclose
+    # `if err != nil { return nil }` — the confirmed-RMW retry loops and the
+    # hash-keyed mutators are exactly the shape that hides one.
+    - nilerr
+    # An http.Request built without a context ignores Terraform's cancellation;
+    # every request here must go through client.NewRequest, which takes one.
+    - noctx
 
   settings:
     dupl:

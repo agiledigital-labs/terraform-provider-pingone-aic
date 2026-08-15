@@ -30,6 +30,17 @@ jobs:
             exit 1
           fi
 
+      # A directly imported module left marked `// indirect` passes vet, test,
+      # lint and build. Only tidy notices.
+      - name: go mod tidy
+        run: |
+          nix develop .#ci --command go mod tidy
+          if ! git diff --quiet -- go.mod go.sum; then
+            echo "go.mod/go.sum are not tidy — commit the result of 'make tidy':"
+            git diff -- go.mod go.sum
+            exit 1
+          fi
+
       - name: go vet
         run: nix develop .#ci --command go vet ./...
 
