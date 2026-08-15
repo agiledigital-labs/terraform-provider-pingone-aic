@@ -50,6 +50,7 @@ type idmScheduleModel struct {
 	InvokeContextType   types.String `tfsdk:"invoke_context_type"`
 	Source              types.String `tfsdk:"source"`
 	ScriptType          types.String `tfsdk:"script_type"`
+	Globals             types.Map    `tfsdk:"globals"`
 	NumberOfThreads     types.Int64  `tfsdk:"number_of_threads"`
 	WaitForCompletion   types.Bool   `tfsdk:"wait_for_completion"`
 	ScanObject          types.String `tfsdk:"scan_object"`
@@ -74,7 +75,7 @@ func (r *idmScheduleResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"name":                 schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"remote_name":          schema.StringAttribute{Computed: true},
 			"enabled":              schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Default false so generated copies do not fire."},
-			"persisted":            schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true)},
+			"persisted":            schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(client.DefaultSchedulePersisted)},
 			"type":                 schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("cron")},
 			"schedule":             schema.StringAttribute{Optional: true, MarkdownDescription: "Quartz cron string."},
 			"invoke_service":       schema.StringAttribute{Required: true, MarkdownDescription: "script | taskscanner | org.forgerock.openidm.script"},
@@ -92,6 +93,7 @@ func (r *idmScheduleResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"invoke_context_type":  schema.StringAttribute{Optional: true},
 			"source":               schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext JavaScript. Inline a string or, preferably, `source = file(\"${path.module}/schedules/foo.js\")`."},
 			"script_type":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("text/javascript")},
+			"globals":              schema.MapAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "String-valued globals exposed to the schedule script."},
 			"number_of_threads":    schema.Int64Attribute{Optional: true},
 			"wait_for_completion":  schema.BoolAttribute{Optional: true},
 			"scan_object":          schema.StringAttribute{Optional: true},
@@ -215,6 +217,7 @@ func modelToSchedule(plan idmScheduleModel) client.Schedule {
 		InvokeContextType:   plan.InvokeContextType.ValueString(),
 		Source:              plan.Source.ValueString(),
 		ScriptType:          plan.ScriptType.ValueString(),
+		Globals:             stringMapFromAttr(plan.Globals),
 		NumberOfThreads:     intFromAttr(plan.NumberOfThreads),
 		WaitForCompletion:   boolFromAttr(plan.WaitForCompletion),
 		ScanObject:          plan.ScanObject.ValueString(),
@@ -253,6 +256,7 @@ func scheduleToModel(s *client.Schedule, logical, pfx string) idmScheduleModel {
 		InvokeContextType:   stringOrNull(s.InvokeContextType),
 		Source:              stringOrNull(s.Source),
 		ScriptType:          types.StringValue(firstNonEmpty(s.ScriptType, "text/javascript")),
+		Globals:             stringMapOrNull(s.Globals),
 		NumberOfThreads:     intOrNull(s.NumberOfThreads),
 		WaitForCompletion:   boolOrNull(s.WaitForCompletion),
 		ScanObject:          stringOrNull(s.ScanObject),
@@ -261,6 +265,23 @@ func scheduleToModel(s *client.Schedule, logical, pfx string) idmScheduleModel {
 		TaskCompleted:       stringOrNull(s.TaskCompleted),
 		RecoveryTimeout:     stringOrNull(s.RecoveryTimeout),
 	}
+}
+
+func stringMapFromAttr(v types.Map) map[string]string {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+	out := make(map[string]string, len(v.Elements()))
+	_ = v.ElementsAs(context.Background(), &out, false)
+	return out
+}
+
+func stringMapOrNull(v map[string]string) types.Map {
+	if v == nil {
+		return types.MapNull(types.StringType)
+	}
+	out, _ := types.MapValueFrom(context.Background(), types.StringType, v)
+	return out
 }
 
 func intFromAttr(v types.Int64) *int64 {

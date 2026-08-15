@@ -2,7 +2,10 @@ package client
 
 import (
 	"context"
+	"fmt"
 )
+
+const DefaultSchedulePersisted = true
 
 var scheduleKeys = map[string]struct{}{
 	"enabled": {}, "persisted": {}, "type": {}, "schedule": {},
@@ -19,6 +22,22 @@ var invokeContextKeys = map[string]struct{}{
 
 var scanKeys = map[string]struct{}{
 	"_queryFilter": {}, "object": {}, "taskState": {}, "recovery": {},
+}
+
+var scriptKeys = map[string]struct{}{
+	"source": {}, "type": {}, "globals": {},
+}
+
+var taskKeys = map[string]struct{}{
+	"script": {},
+}
+
+var taskStateKeys = map[string]struct{}{
+	"started": {}, "completed": {},
+}
+
+var recoveryKeys = map[string]struct{}{
+	"timeout": {},
 }
 
 type Schedule struct {
@@ -41,6 +60,7 @@ type Schedule struct {
 	ScriptProperty      string
 	Source              string
 	ScriptType          string
+	Globals             map[string]string
 	InvokeContextType   string
 	NumberOfThreads     *int64
 	WaitForCompletion   *bool
@@ -49,83 +69,161 @@ type Schedule struct {
 	TaskStarted         string
 	TaskCompleted       string
 	RecoveryTimeout     string
+	present             map[string]map[string]struct{}
 }
 
 func DecodeSchedule(raw map[string]any) (*Schedule, error) {
 	if err := rejectUnknown("schedule", raw, scheduleKeys); err != nil {
 		return nil, err
 	}
-	id, _ := raw["_id"].(string)
-	s := &Schedule{
-		Name:           ConfigName("schedule", id),
-		Type:           stringVal(raw, "type"),
-		Cron:           stringVal(raw, "schedule"),
-		InvokeService:  stringVal(raw, "invokeService"),
-		InvokeLogLevel: stringVal(raw, "invokeLogLevel"),
-		MisfirePolicy:  stringVal(raw, "misfirePolicy"),
-		StartTime:      stringVal(raw, "startTime"),
-		EndTime:        stringVal(raw, "endTime"),
-		ManagedObject:  stringVal(raw, "managedObject"),
-		ScriptProperty: stringVal(raw, "scriptProperty"),
+	id, err := strictString(raw, "_id")
+	if err != nil {
+		return nil, err
 	}
-	if v, ok := boolVal(raw, "enabled"); ok {
+	s := &Schedule{
+		Name:      ConfigName("schedule", id),
+		Persisted: DefaultSchedulePersisted,
+		present:   map[string]map[string]struct{}{"": objectKeys(raw)},
+	}
+	strings := []struct {
+		key string
+		dst *string
+	}{
+		{"type", &s.Type}, {"schedule", &s.Cron}, {"invokeService", &s.InvokeService},
+		{"invokeLogLevel", &s.InvokeLogLevel}, {"misfirePolicy", &s.MisfirePolicy},
+		{"startTime", &s.StartTime}, {"endTime", &s.EndTime},
+		{"managedObject", &s.ManagedObject}, {"scriptProperty", &s.ScriptProperty},
+	}
+	for _, field := range strings {
+		*field.dst, err = strictString(raw, field.key)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if v, ok, err := strictBool(raw, "enabled"); err != nil {
+		return nil, err
+	} else if ok {
 		s.Enabled = v
 	}
-	if v, ok := boolVal(raw, "persisted"); ok {
+	if v, ok, err := strictBool(raw, "persisted"); err != nil {
+		return nil, err
+	} else if ok {
 		s.Persisted = v
 	}
-	if v, ok := boolVal(raw, "concurrentExecution"); ok {
+	if v, ok, err := strictBool(raw, "concurrentExecution"); err != nil {
+		return nil, err
+	} else if ok {
 		s.ConcurrentExecution = &v
 	}
-	if v, ok := boolVal(raw, "recoverable"); ok {
+	if v, ok, err := strictBool(raw, "recoverable"); err != nil {
+		return nil, err
+	} else if ok {
 		s.Recoverable = &v
 	}
-	if v, ok := boolVal(raw, "isCron"); ok {
+	if v, ok, err := strictBool(raw, "isCron"); err != nil {
+		return nil, err
+	} else if ok {
 		s.IsCron = &v
 	}
-	if v, ok := intVal(raw, "repeatCount"); ok {
+	if v, ok, err := strictInt(raw, "repeatCount"); err != nil {
+		return nil, err
+	} else if ok {
 		s.RepeatCount = &v
 	}
-	if v, ok := intVal(raw, "repeatInterval"); ok {
+	if v, ok, err := strictInt(raw, "repeatInterval"); err != nil {
+		return nil, err
+	} else if ok {
 		s.RepeatInterval = &v
 	}
-	ic := asObject(raw["invokeContext"])
+	ic, err := strictObject(raw["invokeContext"], "schedule.invokeContext")
+	if err != nil {
+		return nil, err
+	}
 	if ic != nil {
+		s.present["invokeContext"] = objectKeys(ic)
 		if err := rejectUnknown("schedule.invokeContext", ic, invokeContextKeys); err != nil {
 			return nil, err
 		}
-		s.InvokeContextType = stringVal(ic, "type")
-		if v, ok := intVal(ic, "numberOfThreads"); ok {
+		s.InvokeContextType, err = strictString(ic, "type")
+		if err != nil {
+			return nil, err
+		}
+		if v, ok, err := strictInt(ic, "numberOfThreads"); err != nil {
+			return nil, err
+		} else if ok {
 			s.NumberOfThreads = &v
 		}
-		if v, ok := boolVal(ic, "waitForCompletion"); ok {
+		if v, ok, err := strictBool(ic, "waitForCompletion"); err != nil {
+			return nil, err
+		} else if ok {
 			s.WaitForCompletion = &v
 		}
-		if script := asObject(ic["script"]); script != nil {
-			s.Source = decodeSource(script["source"])
-			if s.Source == "" {
-				s.Source = decodeSource(script)
+		if script, err := strictObject(ic["script"], "schedule.invokeContext.script"); err != nil {
+			return nil, err
+		} else if script != nil {
+			s.present["invokeContext.script"] = objectKeys(script)
+			if err := decodeScheduleScript(s, script, "schedule.invokeContext.script"); err != nil {
+				return nil, err
 			}
-			s.ScriptType = stringVal(script, "type")
 		}
-		if scan := asObject(ic["scan"]); scan != nil {
+		if scan, err := strictObject(ic["scan"], "schedule.invokeContext.scan"); err != nil {
+			return nil, err
+		} else if scan != nil {
+			s.present["invokeContext.scan"] = objectKeys(scan)
 			if err := rejectUnknown("schedule.invokeContext.scan", scan, scanKeys); err != nil {
 				return nil, err
 			}
-			s.ScanObject = stringVal(scan, "object")
-			s.ScanQueryFilter = stringVal(scan, "_queryFilter")
-			if st := asObject(scan["taskState"]); st != nil {
-				s.TaskStarted = stringVal(st, "started")
-				s.TaskCompleted = stringVal(st, "completed")
+			s.ScanObject, err = strictString(scan, "object")
+			if err != nil {
+				return nil, err
 			}
-			if rec := asObject(scan["recovery"]); rec != nil {
-				s.RecoveryTimeout = stringVal(rec, "timeout")
+			s.ScanQueryFilter, err = strictString(scan, "_queryFilter")
+			if err != nil {
+				return nil, err
+			}
+			if st, err := strictObject(scan["taskState"], "schedule.invokeContext.scan.taskState"); err != nil {
+				return nil, err
+			} else if st != nil {
+				s.present["invokeContext.scan.taskState"] = objectKeys(st)
+				if err := rejectUnknown("schedule.invokeContext.scan.taskState", st, taskStateKeys); err != nil {
+					return nil, err
+				}
+				s.TaskStarted, err = strictString(st, "started")
+				if err != nil {
+					return nil, err
+				}
+				s.TaskCompleted, err = strictString(st, "completed")
+				if err != nil {
+					return nil, err
+				}
+			}
+			if rec, err := strictObject(scan["recovery"], "schedule.invokeContext.scan.recovery"); err != nil {
+				return nil, err
+			} else if rec != nil {
+				s.present["invokeContext.scan.recovery"] = objectKeys(rec)
+				if err := rejectUnknown("schedule.invokeContext.scan.recovery", rec, recoveryKeys); err != nil {
+					return nil, err
+				}
+				s.RecoveryTimeout, err = strictString(rec, "timeout")
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
-		if task := asObject(ic["task"]); task != nil {
-			if script := asObject(task["script"]); script != nil {
-				s.Source = decodeSource(script["source"])
-				s.ScriptType = stringVal(script, "type")
+		if task, err := strictObject(ic["task"], "schedule.invokeContext.task"); err != nil {
+			return nil, err
+		} else if task != nil {
+			s.present["invokeContext.task"] = objectKeys(task)
+			if err := rejectUnknown("schedule.invokeContext.task", task, taskKeys); err != nil {
+				return nil, err
+			}
+			if script, err := strictObject(task["script"], "schedule.invokeContext.task.script"); err != nil {
+				return nil, err
+			} else if script != nil {
+				s.present["invokeContext.task.script"] = objectKeys(script)
+				if err := decodeScheduleScript(s, script, "schedule.invokeContext.task.script"); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -136,6 +234,55 @@ func DecodeSchedule(raw map[string]any) (*Schedule, error) {
 		s.ScriptType = "text/javascript"
 	}
 	return s, nil
+}
+
+func objectKeys(raw map[string]any) map[string]struct{} {
+	keys := make(map[string]struct{}, len(raw))
+	for key := range raw {
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
+func restorePresentKeys(body map[string]any, keys map[string]struct{}) {
+	for key := range keys {
+		if key == "_id" || key == "_rev" {
+			continue
+		}
+		if _, exists := body[key]; !exists {
+			body[key] = nil
+		}
+	}
+}
+
+func decodeScheduleScript(s *Schedule, script map[string]any, path string) error {
+	if err := rejectUnknown(path, script, scriptKeys); err != nil {
+		return err
+	}
+	var err error
+	s.Source, err = strictString(script, "source")
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	s.ScriptType, err = strictString(script, "type")
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if _, exists := script["globals"]; exists {
+		globals, err := strictObject(script["globals"], path+".globals")
+		if err != nil {
+			return err
+		}
+		s.Globals = make(map[string]string, len(globals))
+		for key := range globals {
+			value, err := strictString(globals, key)
+			if err != nil {
+				return fmt.Errorf("%s.globals: %w", path, err)
+			}
+			s.Globals[key] = value
+		}
+	}
+	return nil
 }
 
 func EncodeSchedule(s Schedule) map[string]any {
@@ -199,6 +346,13 @@ func EncodeSchedule(s Schedule) map[string]any {
 	if s.ScriptType != "" {
 		script["type"] = s.ScriptType
 	}
+	if s.Globals != nil {
+		globals := make(map[string]any, len(s.Globals))
+		for key, value := range s.Globals {
+			globals[key] = value
+		}
+		script["globals"] = globals
+	}
 	switch s.InvokeService {
 	case "taskscanner":
 		if len(script) > 0 {
@@ -230,6 +384,26 @@ func EncodeSchedule(s Schedule) map[string]any {
 	}
 	if len(ic) > 0 {
 		body["invokeContext"] = ic
+	}
+	if s.present != nil {
+		restorePresentKeys(body, s.present[""])
+		restorePresentKeys(ic, s.present["invokeContext"])
+		restorePresentKeys(script, s.present["invokeContext.script"])
+		if task, ok := ic["task"].(map[string]any); ok {
+			restorePresentKeys(task, s.present["invokeContext.task"])
+			if taskScript, ok := task["script"].(map[string]any); ok {
+				restorePresentKeys(taskScript, s.present["invokeContext.task.script"])
+			}
+		}
+		if scan, ok := ic["scan"].(map[string]any); ok {
+			restorePresentKeys(scan, s.present["invokeContext.scan"])
+			if state, ok := scan["taskState"].(map[string]any); ok {
+				restorePresentKeys(state, s.present["invokeContext.scan.taskState"])
+			}
+			if recovery, ok := scan["recovery"].(map[string]any); ok {
+				restorePresentKeys(recovery, s.present["invokeContext.scan.recovery"])
+			}
+		}
 	}
 	return body
 }

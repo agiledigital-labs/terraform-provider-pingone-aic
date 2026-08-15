@@ -10,37 +10,57 @@ var endpointKeys = map[string]struct{}{
 	"context": {}, "globals": {}, "globalsObject": {},
 }
 
+var endpointSourceKeys = map[string]struct{}{
+	"source": {}, "type": {},
+}
+
 type Endpoint struct {
-	Name          string
-	Type          string
-	Source        string
-	File          string
-	Description   string
-	Context       string
-	GlobalsObject string
-	AllowedRoles  []string
+	Name               string
+	Type               string
+	Source             string
+	File               string
+	Description        string
+	Context            string
+	GlobalsObject      string
+	AllowedRoles       []string
+	NestedSource       bool
+	EmptyGlobalsObject bool
 }
 
 func DecodeEndpoint(raw map[string]any) (*Endpoint, error) {
 	if err := rejectUnknown("endpoint", raw, endpointKeys); err != nil {
 		return nil, err
 	}
-	id, _ := raw["_id"].(string)
+	id, err := strictString(raw, "_id")
+	if err != nil {
+		return nil, err
+	}
 	e := &Endpoint{
-		Name:          ConfigName("endpoint", id),
-		Type:          stringVal(raw, "type"),
-		File:          stringVal(raw, "file"),
-		Description:   stringVal(raw, "description"),
-		Context:       stringVal(raw, "context"),
-		Source:        decodeSource(raw["source"]),
-		GlobalsObject: "",
+		Name: ConfigName("endpoint", id),
+	}
+	for key, dst := range map[string]*string{
+		"type": &e.Type, "file": &e.File, "description": &e.Description, "context": &e.Context,
+	} {
+		*dst, err = strictString(raw, key)
+		if err != nil {
+			return nil, err
+		}
+	}
+	e.Source, e.NestedSource, err = decodeEndpointSource(raw["source"])
+	if err != nil {
+		return nil, err
 	}
 	globalsObj, err := decodeGlobalsObject(raw["globalsObject"])
 	if err != nil {
 		return nil, err
 	}
 	e.GlobalsObject = globalsObj
-	if g := asObject(raw["globals"]); g != nil {
+	if globals, ok := raw["globalsObject"].(map[string]any); ok && len(globals) == 0 {
+		e.EmptyGlobalsObject = true
+	}
+	if g, err := strictObject(raw["globals"], "endpoint.globals"); err != nil {
+		return nil, err
+	} else if g != nil {
 		roles, err := decodeAllowedRoles(g)
 		if err != nil {
 			return nil, err
@@ -58,7 +78,11 @@ func EncodeEndpoint(e Endpoint) map[string]any {
 		"type": e.Type,
 	}
 	if e.Source != "" {
-		body["source"] = e.Source
+		if e.NestedSource {
+			body["source"] = map[string]any{"source": e.Source, "type": e.Type}
+		} else {
+			body["source"] = e.Source
+		}
 	}
 	if e.File != "" {
 		body["file"] = e.File
@@ -71,6 +95,8 @@ func EncodeEndpoint(e Endpoint) map[string]any {
 	}
 	if e.GlobalsObject != "" {
 		body["globalsObject"] = e.GlobalsObject
+	} else if e.EmptyGlobalsObject {
+		body["globalsObject"] = map[string]any{}
 	}
 	if len(e.AllowedRoles) > 0 {
 		body["globals"] = map[string]any{
@@ -114,16 +140,28 @@ func (c *Client) DeleteEndpoint(ctx context.Context, name string) error {
 	return c.DeleteConfig(ctx, ConfigID("endpoint", name))
 }
 
-func decodeSource(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case map[string]any:
-		if s, ok := t["source"].(string); ok {
-			return s
-		}
+func decodeEndpointSource(v any) (string, bool, error) {
+	if v == nil {
+		return "", false, nil
 	}
-	return ""
+	if source, ok := v.(string); ok {
+		return source, false, nil
+	}
+	o, err := strictObject(v, "endpoint.source")
+	if err != nil {
+		return "", false, err
+	}
+	if err := rejectUnknown("endpoint.source", o, endpointSourceKeys); err != nil {
+		return "", false, err
+	}
+	source, err := strictString(o, "source")
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := strictString(o, "type"); err != nil {
+		return "", false, err
+	}
+	return source, true, nil
 }
 
 func decodeGlobalsObject(v any) (string, error) {
@@ -152,7 +190,10 @@ func decodeAllowedRoles(globals map[string]any) ([]string, error) {
 	if len(unknown) > 0 {
 		return nil, fmt.Errorf("endpoint has unmodelled fields %v — add them to internal/client/idm_endpoint.go", unknown)
 	}
-	cfg := asObject(globals["endpointConfig"])
+	cfg, err := strictObject(globals["endpointConfig"], "endpoint.globals.endpointConfig")
+	if err != nil {
+		return nil, err
+	}
 	if cfg == nil {
 		return nil, nil
 	}
@@ -161,13 +202,21 @@ func decodeAllowedRoles(globals map[string]any) ([]string, error) {
 			return nil, fmt.Errorf("endpoint globals.endpointConfig has unmodelled fields [%s]", k)
 		}
 	}
-	arr, _ := cfg["allowedRoles"].([]any)
+	v, exists := cfg["allowedRoles"]
+	if !exists || v == nil {
+		return nil, nil
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("endpoint.globals.endpointConfig.allowedRoles is %T, want array", v)
+	}
 	out := make([]string, 0, len(arr))
-	for _, item := range arr {
-		s, _ := item.(string)
-		if s != "" {
-			out = append(out, s)
+	for i, item := range arr {
+		s, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("endpoint.globals.endpointConfig.allowedRoles[%d] is %T, want string", i, item)
 		}
+		out = append(out, s)
 	}
 	return out, nil
 }

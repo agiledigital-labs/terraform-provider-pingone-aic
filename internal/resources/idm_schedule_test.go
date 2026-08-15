@@ -16,6 +16,7 @@ func TestScheduleModelPreservesKnownOptionalFields(t *testing.T) {
 		StartTime:         "2026-08-15T00:00:00Z",
 		EndTime:           "2026-08-16T00:00:00Z",
 		InvokeContextType: "text/javascript",
+		Globals:           map[string]string{"region": "au"},
 	}
 
 	got := modelToSchedule(scheduleToModel(schedule, "cleanup", "Terraform_"))
@@ -27,5 +28,8 @@ func TestScheduleModelPreservesKnownOptionalFields(t *testing.T) {
 	}
 	if got.InvokeContextType != schedule.InvokeContextType {
 		t.Fatalf("invoke context type = %q, want %q", got.InvokeContextType, schedule.InvokeContextType)
+	}
+	if got.Globals["region"] != "au" {
+		t.Fatalf("globals = %#v", got.Globals)
 	}
 }

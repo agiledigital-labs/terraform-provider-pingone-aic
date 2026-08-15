@@ -116,42 +116,6 @@ func unknownKeys(raw map[string]any, known map[string]struct{}) []string {
 	return unknown
 }
 
-func stringVal(m map[string]any, k string) string {
-	if m == nil {
-		return ""
-	}
-	s, _ := m[k].(string)
-	return s
-}
-
-func boolVal(m map[string]any, k string) (bool, bool) {
-	if m == nil {
-		return false, false
-	}
-	v, ok := m[k]
-	if !ok || v == nil {
-		return false, false
-	}
-	b, ok := v.(bool)
-	return b, ok
-}
-
-func intVal(m map[string]any, k string) (int64, bool) {
-	if m == nil {
-		return 0, false
-	}
-	switch n := m[k].(type) {
-	case float64:
-		return int64(n), true
-	case int:
-		return int64(n), true
-	case int64:
-		return n, true
-	default:
-		return 0, false
-	}
-}
-
 func rejectUnknown(kind string, raw map[string]any, known map[string]struct{}) error {
 	if u := unknownKeys(raw, known); len(u) > 0 {
 		return fmt.Errorf("%s has unmodelled fields %v — add them to internal/client/idm.go", kind, u)
@@ -162,4 +126,61 @@ func rejectUnknown(kind string, raw map[string]any, known map[string]struct{}) e
 func asObject(v any) map[string]any {
 	o, _ := v.(map[string]any)
 	return o
+}
+
+func strictString(m map[string]any, key string) (string, error) {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return "", nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("%s is %T, want string", key, v)
+	}
+	return s, nil
+}
+
+func strictBool(m map[string]any, key string) (bool, bool, error) {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return false, false, nil
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return false, false, fmt.Errorf("%s is %T, want boolean", key, v)
+	}
+	return b, true, nil
+}
+
+func strictInt(m map[string]any, key string) (int64, bool, error) {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return 0, false, nil
+	}
+	var n int64
+	switch value := v.(type) {
+	case float64:
+		n = int64(value)
+		if float64(n) != value {
+			return 0, false, fmt.Errorf("%s is %v, want integer", key, value)
+		}
+	case int:
+		n = int64(value)
+	case int64:
+		n = value
+	default:
+		return 0, false, fmt.Errorf("%s is %T, want integer", key, v)
+	}
+	return n, true, nil
+}
+
+func strictObject(v any, path string) (map[string]any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	o, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s is %T, want object", path, v)
+	}
+	return o, nil
 }

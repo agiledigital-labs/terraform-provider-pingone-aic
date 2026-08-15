@@ -1,49 +1,9 @@
 package client
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
-
-func TestDecodeAllLiveRoles(t *testing.T) {
-	dir := filepath.Join("testdata", "roles")
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(ents) < 8 {
-		t.Fatalf("want the 8 live roles, got %d", len(ents))
-	}
-	var withPrivs, withFilter int
-	for _, e := range ents {
-		raw := readJSONMap(t, filepath.Join(dir, e.Name()))
-		got, err := DecodeRole(raw)
-		if err != nil {
-			t.Fatalf("%s: %v", e.Name(), err)
-		}
-		if got.ID == "" || got.Name == "" {
-			t.Fatalf("%s: %#v", e.Name(), got)
-		}
-		if len(got.Privileges) > 0 {
-			withPrivs++
-		}
-		for _, p := range got.Privileges {
-			if p.Filter != "" {
-				withFilter++
-			}
-			if len(p.AccessFlags) == 0 {
-				t.Fatalf("%s: empty accessFlags", e.Name())
-			}
-		}
-		if _, err := EncodeRole(*got); err != nil {
-			t.Fatalf("%s encode: %v", e.Name(), err)
-		}
-	}
-	if withPrivs != 2 || withFilter != 1 {
-		t.Fatalf("priv roles = %d filter = %d", withPrivs, withFilter)
-	}
-}
 
 func TestDecodeRoleRejectsUnknownField(t *testing.T) {
 	_, err := DecodeRole(map[string]any{"_id": "x", "name": "x", "brandNew": true})

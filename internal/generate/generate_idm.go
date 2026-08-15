@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/client"
@@ -204,6 +205,22 @@ func (g *gen) writeSchedules() error {
 		}
 		if s.RecoveryTimeout != "" {
 			b.WriteString(fmt.Sprintf("  recovery_timeout = %s\n", hclString(s.RecoveryTimeout)))
+		}
+		if s.Globals != nil {
+			b.WriteString("  globals = {")
+			keys := make([]string, 0, len(s.Globals))
+			for key := range s.Globals {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			if len(keys) > 0 {
+				b.WriteString("\n")
+				for _, key := range keys {
+					b.WriteString(fmt.Sprintf("    %s = %s\n", hclString(key), hclString(s.Globals[key])))
+				}
+				b.WriteString("  ")
+			}
+			b.WriteString("}\n")
 		}
 		if s.Source != "" {
 			rel := filepath.Join("schedules", e.Label+".js")
