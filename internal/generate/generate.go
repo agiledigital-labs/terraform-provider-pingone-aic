@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/amjson"
@@ -22,6 +21,7 @@ import (
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/nodetype"
 	"github.com/agiledigital-labs/terraform-provider-pingone-aic/internal/prefix"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty"
 )
 
 type Options struct {
@@ -213,34 +213,43 @@ func selectJourneys(available, requested []string) ([]string, error) {
 // directory reports an error instead of eating the files in it.
 const generatedMarker = ".pingoneaic-generated"
 
+// generatedOutputs is every path this tool writes under -out, relative to
+// that directory. generatedPaths deletes exactly these; writeMarker lists
+// exactly these. Adding a new output file is one append.
+var generatedOutputs = []string{
+	"provider.tf",
+	"scripts.tf",
+	"oauth2_clients.tf",
+	"esv_variables.tf",
+	"esv_secrets.tf",
+	"managed_objects.tf",
+	"idm_endpoints.tf",
+	"idm_schedules.tf",
+	"access_rules.tf.review",
+	"authentication_mappings.tf.review",
+	"internal_roles.tf",
+	"journey_*.tf",
+	"scripts/*.js",
+	"endpoints/*.js",
+	"schedules/*.js",
+	"hooks/*.js",
+}
+
 // generatedPaths lists the files a previous run of this tool would have left in
 // outDir. Stale ones must go, or a journey deleted in the tenant would linger.
 func generatedPaths(outDir string) ([]string, error) {
-	paths := []string{
-		filepath.Join(outDir, "provider.tf"),
-		filepath.Join(outDir, "scripts.tf"),
-		filepath.Join(outDir, "oauth2_clients.tf"),
-		filepath.Join(outDir, "esv_variables.tf"),
-		filepath.Join(outDir, "esv_secrets.tf"),
-		filepath.Join(outDir, "managed_objects.tf"),
-		filepath.Join(outDir, "idm_endpoints.tf"),
-		filepath.Join(outDir, "idm_schedules.tf"),
-		filepath.Join(outDir, "access_rules.tf.review"),
-		filepath.Join(outDir, "authentication_mappings.tf.review"),
-		filepath.Join(outDir, "internal_roles.tf"),
-	}
-	for _, pattern := range []string{
-		filepath.Join(outDir, "journey_*.tf"),
-		filepath.Join(outDir, "scripts", "*.js"),
-		filepath.Join(outDir, "endpoints", "*.js"),
-		filepath.Join(outDir, "schedules", "*.js"),
-		filepath.Join(outDir, "hooks", "*.js"),
-	} {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("match old generated files %q: %w", pattern, err)
+	var paths []string
+	for _, rel := range generatedOutputs {
+		full := filepath.Join(outDir, filepath.FromSlash(rel))
+		if strings.ContainsRune(rel, '*') {
+			matches, err := filepath.Glob(full)
+			if err != nil {
+				return nil, fmt.Errorf("match old generated files %q: %w", rel, err)
+			}
+			paths = append(paths, matches...)
+			continue
 		}
-		paths = append(paths, matches...)
+		paths = append(paths, full)
 	}
 	present := make([]string, 0, len(paths))
 	for _, path := range paths {
@@ -251,10 +260,6 @@ func generatedPaths(outDir string) ([]string, error) {
 	return present, nil
 }
 
-// cleanGeneratedFiles removes the previous run's output from outDir. It deletes
-// nothing unless the directory carries generatedMarker: an unmarked directory
-// holding files that look generated is far more likely to be someone's
-// hand-written config than a stale run, and this is destructive.
 // checkGeneratedDir reports whether outDir is ours to overwrite: either it
 // carries the marker, or it holds nothing this tool would delete.
 func checkGeneratedDir(outDir string) error {
@@ -275,6 +280,10 @@ func checkGeneratedDir(outDir string) error {
 	return nil // fresh directory, or one holding only unrelated files
 }
 
+// cleanGeneratedFiles removes the previous run's output from outDir. It deletes
+// nothing unless the directory carries generatedMarker: an unmarked directory
+// holding files that look generated is far more likely to be someone's
+// hand-written config than a stale run, and this is destructive.
 func cleanGeneratedFiles(outDir string) error {
 	if err := checkGeneratedDir(outDir); err != nil {
 		return err
@@ -295,9 +304,7 @@ func cleanGeneratedFiles(outDir string) error {
 // part-way still leaves a directory the next run is allowed to clean.
 func writeMarker(outDir string) error {
 	body := "# Written by pingoneaic-tf. This directory is regenerated: files\n" +
-		"# matching provider.tf, scripts.tf, oauth2_clients.tf, esv_variables.tf,\n" +
-		"# esv_secrets.tf, managed_objects.tf, idm_*.tf, access_rules.tf.review,\n" +
-		"# authentication_mappings.tf.review, internal_roles.tf, journey_*.tf and scripts/*.js are deleted on each run.\n" +
+		"# matching " + strings.Join(generatedOutputs, ", ") + " are deleted on each run.\n" +
 		"# Do not keep hand-written config here.\n"
 	return os.WriteFile(filepath.Join(outDir, generatedMarker), []byte(body), 0o644)
 }
@@ -808,12 +815,19 @@ func jsonUnmarshal(s string, dest any) error {
 	return json.Unmarshal([]byte(s), dest)
 }
 
+// hclString quotes s as a Terraform string literal. Template introducers
+// (${ and %{) are escaped so tenant text cannot be evaluated as interpolation
+// or directives. hclFile is the exception that must keep a real ${path.module}.
 func hclString(s string) string {
-	return strconv.Quote(s)
+	// TokensForValue already doubles ${ / %{ and emits HCL-valid escapes
+	// (\uXXXX, not Go's \xHH / \a) so the result parses and evaluates to s.
+	return string(hclwrite.TokensForValue(cty.StringVal(s)).Bytes())
 }
 
 // hclFile is a module-relative file() so generated HCL links to the extracted
 // .js instead of inlining the body. rel uses slashes (Terraform paths).
+// The ${path.module} interpolation is deliberate — do not pass this through
+// hclString.
 func hclFile(rel string) string {
 	return fmt.Sprintf(`file("${path.module}/%s")`, filepath.ToSlash(rel))
 }

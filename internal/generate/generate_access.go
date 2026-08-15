@@ -114,7 +114,7 @@ func (g *gen) writeAccessRules() error {
 		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("resource \"pingoneaic_access_rule\" %q {\n", e.Label))
 		b.WriteString(fmt.Sprintf("  pattern = %s\n", hclString(r.Pattern)))
-		b.WriteString(fmt.Sprintf("  roles   = %s\n", hclString(r.Roles)))
+		b.WriteString(fmt.Sprintf("  roles = %s\n", hclString(r.Roles)))
 		b.WriteString(fmt.Sprintf("  methods = %s\n", hclString(r.Methods)))
 		if r.Actions != nil {
 			b.WriteString(fmt.Sprintf("  actions = %s\n", hclString(*r.Actions)))
@@ -149,10 +149,10 @@ func (g *gen) writeAuthMappings() error {
 		m := e.Mapping
 		b.WriteString(fmt.Sprintf("# hash %s\n", e.Hash))
 		b.WriteString(fmt.Sprintf("resource \"pingoneaic_authentication_mapping\" %q {\n", e.Label))
-		b.WriteString(fmt.Sprintf("  subject    = %s\n", hclString(m.Subject)))
+		b.WriteString(fmt.Sprintf("  subject = %s\n", hclString(m.Subject)))
 		b.WriteString(fmt.Sprintf("  local_user = %s\n", hclString(m.LocalUser)))
 		if len(m.Roles) > 0 {
-			b.WriteString(fmt.Sprintf("  roles      = %s\n", hclStringList(m.Roles)))
+			b.WriteString(fmt.Sprintf("  roles = %s\n", hclStringList(m.Roles)))
 		}
 		if m.UserRoles != "" {
 			b.WriteString(fmt.Sprintf("  user_roles = %s\n", hclString(m.UserRoles)))
