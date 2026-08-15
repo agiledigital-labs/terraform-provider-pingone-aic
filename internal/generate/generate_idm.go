@@ -160,17 +160,29 @@ func (g *gen) writeSchedules() error {
 		if s.Recoverable != nil {
 			b.WriteString(fmt.Sprintf("  recoverable = %v\n", *s.Recoverable))
 		}
+		if s.IsCron != nil {
+			b.WriteString(fmt.Sprintf("  is_cron = %v\n", *s.IsCron))
+		}
 		if s.RepeatCount != nil {
 			b.WriteString(fmt.Sprintf("  repeat_count = %d\n", *s.RepeatCount))
 		}
 		if s.RepeatInterval != nil {
 			b.WriteString(fmt.Sprintf("  repeat_interval = %d\n", *s.RepeatInterval))
 		}
+		if s.StartTime != "" {
+			b.WriteString(fmt.Sprintf("  start_time = %s\n", hclString(s.StartTime)))
+		}
+		if s.EndTime != "" {
+			b.WriteString(fmt.Sprintf("  end_time = %s\n", hclString(s.EndTime)))
+		}
 		if s.ManagedObject != "" {
 			b.WriteString(fmt.Sprintf("  managed_object = %s\n", hclString(s.ManagedObject)))
 		}
 		if s.ScriptProperty != "" {
 			b.WriteString(fmt.Sprintf("  script_property = %s\n", hclString(s.ScriptProperty)))
+		}
+		if s.InvokeContextType != "" {
+			b.WriteString(fmt.Sprintf("  invoke_context_type = %s\n", hclString(s.InvokeContextType)))
 		}
 		if s.NumberOfThreads != nil {
 			b.WriteString(fmt.Sprintf("  number_of_threads = %d\n", *s.NumberOfThreads))

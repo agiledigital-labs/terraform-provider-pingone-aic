@@ -318,6 +318,41 @@ func TestWriteVariablesEmitsPlaintextAndOmitsStringDefault(t *testing.T) {
 	}
 }
 
+func TestWriteSchedulesPreservesKnownOptionalFields(t *testing.T) {
+	dir := t.TempDir()
+	isCron := false
+	g := &gen{
+		opt: Options{OutDir: dir},
+		schedules: []emittedSchedule{{
+			Name:  "cleanup",
+			Label: "cleanup",
+			Sched: client.Schedule{
+				Name: "cleanup", InvokeService: "script", Type: "cron", Persisted: true,
+				IsCron: &isCron, StartTime: "2026-08-15T00:00:00Z", EndTime: "2026-08-16T00:00:00Z",
+				InvokeContextType: "text/javascript",
+			},
+		}},
+	}
+	if err := g.writeSchedules(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "idm_schedules.tf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(got)
+	for _, want := range []string{
+		"is_cron             = false",
+		`start_time          = "2026-08-15T00:00:00Z"`,
+		`end_time            = "2026-08-16T00:00:00Z"`,
+		`invoke_context_type = "text/javascript"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in generated schedule:\n%s", want, body)
+		}
+	}
+}
+
 func TestHclIdentOrQuote(t *testing.T) {
 	if hclIdentOrQuote("ok") != "ok" {
 		t.Fatal("ok")

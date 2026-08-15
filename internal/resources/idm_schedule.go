@@ -40,10 +40,14 @@ type idmScheduleModel struct {
 	MisfirePolicy       types.String `tfsdk:"misfire_policy"`
 	ConcurrentExecution types.Bool   `tfsdk:"concurrent_execution"`
 	Recoverable         types.Bool   `tfsdk:"recoverable"`
+	IsCron              types.Bool   `tfsdk:"is_cron"`
 	RepeatCount         types.Int64  `tfsdk:"repeat_count"`
 	RepeatInterval      types.Int64  `tfsdk:"repeat_interval"`
+	StartTime           types.String `tfsdk:"start_time"`
+	EndTime             types.String `tfsdk:"end_time"`
 	ManagedObject       types.String `tfsdk:"managed_object"`
 	ScriptProperty      types.String `tfsdk:"script_property"`
+	InvokeContextType   types.String `tfsdk:"invoke_context_type"`
 	Source              types.String `tfsdk:"source"`
 	ScriptType          types.String `tfsdk:"script_type"`
 	NumberOfThreads     types.Int64  `tfsdk:"number_of_threads"`
@@ -78,10 +82,14 @@ func (r *idmScheduleResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"misfire_policy":       schema.StringAttribute{Optional: true},
 			"concurrent_execution": schema.BoolAttribute{Optional: true},
 			"recoverable":          schema.BoolAttribute{Optional: true},
+			"is_cron":              schema.BoolAttribute{Optional: true},
 			"repeat_count":         schema.Int64Attribute{Optional: true},
 			"repeat_interval":      schema.Int64Attribute{Optional: true},
+			"start_time":           schema.StringAttribute{Optional: true},
+			"end_time":             schema.StringAttribute{Optional: true},
 			"managed_object":       schema.StringAttribute{Optional: true},
 			"script_property":      schema.StringAttribute{Optional: true},
+			"invoke_context_type":  schema.StringAttribute{Optional: true},
 			"source":               schema.StringAttribute{Optional: true, MarkdownDescription: "Plaintext JavaScript. Inline a string or, preferably, `source = file(\"${path.module}/schedules/foo.js\")`."},
 			"script_type":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("text/javascript")},
 			"number_of_threads":    schema.Int64Attribute{Optional: true},
@@ -197,10 +205,14 @@ func modelToSchedule(plan idmScheduleModel) client.Schedule {
 		MisfirePolicy:       plan.MisfirePolicy.ValueString(),
 		ConcurrentExecution: boolFromAttr(plan.ConcurrentExecution),
 		Recoverable:         boolFromAttr(plan.Recoverable),
+		IsCron:              boolFromAttr(plan.IsCron),
 		RepeatCount:         intFromAttr(plan.RepeatCount),
 		RepeatInterval:      intFromAttr(plan.RepeatInterval),
+		StartTime:           plan.StartTime.ValueString(),
+		EndTime:             plan.EndTime.ValueString(),
 		ManagedObject:       plan.ManagedObject.ValueString(),
 		ScriptProperty:      plan.ScriptProperty.ValueString(),
+		InvokeContextType:   plan.InvokeContextType.ValueString(),
 		Source:              plan.Source.ValueString(),
 		ScriptType:          plan.ScriptType.ValueString(),
 		NumberOfThreads:     intFromAttr(plan.NumberOfThreads),
@@ -231,10 +243,14 @@ func scheduleToModel(s *client.Schedule, logical, pfx string) idmScheduleModel {
 		MisfirePolicy:       stringOrNull(s.MisfirePolicy),
 		ConcurrentExecution: boolOrNull(s.ConcurrentExecution),
 		Recoverable:         boolOrNull(s.Recoverable),
+		IsCron:              boolOrNull(s.IsCron),
 		RepeatCount:         intOrNull(s.RepeatCount),
 		RepeatInterval:      intOrNull(s.RepeatInterval),
+		StartTime:           stringOrNull(s.StartTime),
+		EndTime:             stringOrNull(s.EndTime),
 		ManagedObject:       stringOrNull(s.ManagedObject),
 		ScriptProperty:      stringOrNull(s.ScriptProperty),
+		InvokeContextType:   stringOrNull(s.InvokeContextType),
 		Source:              stringOrNull(s.Source),
 		ScriptType:          types.StringValue(firstNonEmpty(s.ScriptType, "text/javascript")),
 		NumberOfThreads:     intOrNull(s.NumberOfThreads),
